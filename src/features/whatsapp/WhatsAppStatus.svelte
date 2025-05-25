@@ -5,7 +5,7 @@
   import { cn } from '$lib/utils';
   import { BsWhatsapp } from 'svelte-icons/bs';
   import { RiRefreshLine, RiCheckLine, RiErrorWarningLine } from 'svelte-icons/ri';
-  import { whatsappService } from '$lib/services/whatsappService';
+  import { whatsappService } from './whatsappService';
   import { initializeSocket, onWhatsAppStatus, onWhatsAppAuth } from '$lib/services/socketService';
   import { toasts } from '$lib/stores/toastStore';
 
@@ -102,13 +102,14 @@
   });
 </script>
 
-<Button variant="ghost" on:click={handleShow} class="flex items-center gap-2">
+<Button variant="ghost" on:click={handleShow} className="flex items-center gap-2">
   <BsWhatsapp class="text-xl" />
+  <!-- svelte-ignore element_invalid_self_closing_tag -->
   <span class={cn('w-2 h-2 rounded-full animate-pulse', getStatusColor())} />
 </Button>
 
 <BaseModal
-  {isModalOpen}
+  isOpen={isModalOpen}
   onClose={() => (isModalOpen = false)}
   size="md"
   closeOnClickOutside
@@ -124,6 +125,7 @@
         <h4 class="text-lg font-semibold">
           {status === 'connected' ? 'Conectado' : 'Desconectado'}
         </h4>
+        <!-- svelte-ignore element_invalid_self_closing_tag -->
         <span class={cn('w-3 h-3 rounded-full', getStatusColor())} />
       </div>
       <p class="text-sm text-gray-600 text-center">
@@ -172,13 +174,13 @@
         variant="outline"
         on:click={resetSession}
         isLoading={isRefreshing}
-        leftIcon={<RiRefreshLine />}
+        leftIcon={RiRefreshLine}
       >
         Verificar estado
       </Button>
 
       {#if status === 'connected'}
-        <Button variant="primary" on:click={sendTestMessage} leftIcon={<BsWhatsapp />}>
+        <Button variant="primary" on:click={sendTestMessage} leftIcon={BsWhatsapp}>
           Enviar prueba
         </Button>
       {/if}

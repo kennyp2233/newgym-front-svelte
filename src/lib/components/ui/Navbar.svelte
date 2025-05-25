@@ -1,9 +1,8 @@
 <script lang="ts">
 	import NavItem from './NavItem.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import WhatsAppStatus from '$lib/components/ui/WhatsAppStatus.svelte';
+	import WhatsAppStatus from '../../../features/whatsapp/WhatsAppStatus.svelte';
 	import Logo from '$lib/assets/logo.svg';
 	import Logo2 from '$lib/assets/logo_khannda.svg';
 	import {
@@ -66,7 +65,7 @@
 				on:click={handleLogout}
 				on:mouseenter={() => (logoutHovered = true)}
 				on:mouseleave={() => (logoutHovered = false)}
-				class="text-[var(--letter)] hover:bg-red-50 hover:text-red-500"
+				className="text-[var(--letter)] hover:bg-red-50 hover:text-red-500"
 			>
 				<span class="mr-2 text-xl">
 					{logoutHovered ? RiLogoutBoxRLine : RiLogoutBoxLine}
