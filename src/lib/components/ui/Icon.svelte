@@ -34,7 +34,7 @@
 
 	// Obtener el componente de icono correcto
 	$: iconName = iconMap[name] || 'X'; // X como fallback
-	$: Icon = Icons[iconName];
+	$: Icon = (Icons as any)[iconName];
 </script>
 
 {#if Icon}

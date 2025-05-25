@@ -1,4 +1,5 @@
 import { api } from '$lib/services/api';
+import type { Medida } from '../medidas/api';
 
 // Enums que deben coincidir con el backend
 export enum TipoOcupacion {
@@ -78,7 +79,7 @@ export interface Cliente {
     createdAt: string;
     updatedAt: string;
     inscripciones?: InscripcionDTO[];
-    medidas?: MedidaDTO[];
+    medidas?: Medida[];
 }
 
 // Servicio para las operaciones de clientes

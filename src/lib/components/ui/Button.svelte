@@ -22,7 +22,7 @@
 
 <button
 	{type}
-	class={`inline-flex items-center justify-center rounded-md font-bold transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:pointer-events-none disabled:opacity-50
+	class={`inline-flex cursor-pointer items-center justify-center rounded-md font-bold transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:pointer-events-none disabled:opacity-50
     ${variant === 'primary' && 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}
     ${variant === 'secondary' && 'bg-[var(--secondary)] text-white hover:bg-[var(--secondary-hover)]'}
     ${variant === 'outline' && 'border-input hover:bg-accent hover:text-accent-foreground border bg-transparent'}

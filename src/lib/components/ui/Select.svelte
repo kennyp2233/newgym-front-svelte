@@ -8,6 +8,7 @@
 	export let value = '';
 	export let id = '';
 	export let name = '';
+	export let disabled = false;
 </script>
 
 <div class="w-full space-y-1.5">
@@ -25,6 +26,7 @@
         ${size === 'md' && 'h-10 text-base'}
         ${size === 'lg' && 'h-12 text-lg'}
         ${error && 'border-red-500 focus:ring-red-500'}`}
+			{disabled}
 		>
 			{#each options as opt}
 				<option value={opt.value}>{opt.label}</option>
