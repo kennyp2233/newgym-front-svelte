@@ -1,17 +1,13 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import Icon from './Icon.svelte';
+
 	export let href = '/';
 	export let label = '';
-	export let icon: any;
-	export let activeIcon: any;
+	export let icon = ''; // string name instead of component
+	export let activeIcon = ''; // string name instead of component
 	export let isActive = false;
 
 	let hovered = false;
-	const dispatch = createEventDispatcher();
-
-	function click() {
-		dispatch('navigate', href);
-	}
 </script>
 
 <a
@@ -23,11 +19,7 @@
 	on:mouseleave={() => (hovered = false)}
 >
 	<span class="mr-2 text-xl">
-		{#if isActive || hovered}
-			<svelte:component this={activeIcon} />
-		{:else}
-			<svelte:component this={icon} />
-		{/if}
+		<Icon name={isActive || hovered ? activeIcon : icon} size={20} />
 	</span>
 	<span class="font-medium">{label}</span>
 </a>

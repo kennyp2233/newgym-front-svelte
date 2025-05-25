@@ -1,17 +1,20 @@
 <script lang="ts">
+	import Icon from './Icon.svelte';
+
 	export let label = '';
 	export let helperText = '';
 	export let errorMessage = '';
 	export let type = 'text';
 	export let error = false;
-	export let leftIcon: any = null;
-	export let rightIcon: any = null;
-	export let unit: string | null = null;
+	export let leftIcon: string = '';
+	export let rightIcon: string = '';
+	export let unit: string = '';
 	export let size: 'sm' | 'md' | 'lg' = 'md';
 	export let value = '';
 	export let id = '';
 	export let name = '';
 	export let placeholder = '';
+	export let disabled = false;
 </script>
 
 <div class="w-full space-y-1.5">
@@ -21,29 +24,42 @@
 
 	<div class="relative flex items-center">
 		{#if leftIcon}
-			<div class="text-muted-foreground absolute left-3">{@html leftIcon}</div>
+			<div class="text-muted-foreground pointer-events-none absolute left-3 flex items-center">
+				<Icon name={leftIcon} size={16} className="text-gray-400" />
+			</div>
 		{/if}
 
 		<input
 			{id}
 			{name}
+			{disabled}
 			bind:value
 			{type}
 			{placeholder}
-			class={`w-full rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 focus:ring-2 focus:ring-offset-2
+			class={`focus-visible:ring-ring w-full rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 focus:ring-2 focus:ring-offset-2 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50
         ${leftIcon ? 'pl-10' : ''} ${rightIcon || unit ? 'pr-14' : ''}
         ${size === 'sm' && 'h-8 text-sm'}
         ${size === 'md' && 'h-10 text-base'}
         ${size === 'lg' && 'h-12 text-lg'}
         ${error && 'border-red-500 focus:ring-red-500'}`}
+			on:input
+			on:change
+			on:keydown
+			on:focus
+			on:blur
 		/>
 
 		{#if rightIcon || unit}
-			<div class="text-muted-foreground absolute right-2 flex h-full items-center border-l px-3">
+			<div
+				class="pointer-events-none absolute right-1 flex h-full items-center border-l border-[var(--border)] px-3"
+			>
 				{#if unit}
-					<span class="text-sm">{unit}</span>
-				{:else}
-					{@html rightIcon}
+					<span
+						class="text-md text-muted-foreground font-[family-name:var(--font-main)] font-medium text-[var(--letter)]"
+						>{unit}</span
+					>
+				{:else if rightIcon}
+					<Icon name={rightIcon} size={16} className="text-gray-400" />
 				{/if}
 			</div>
 		{/if}

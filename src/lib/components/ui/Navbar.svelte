@@ -1,18 +1,11 @@
 <script lang="ts">
 	import NavItem from './NavItem.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import Icon from './Icon.svelte';
 	import { page } from '$app/stores';
 	import WhatsAppStatus from '../../../features/whatsapp/WhatsAppStatus.svelte';
 	import Logo from '$lib/assets/logo.svg';
 	import Logo2 from '$lib/assets/logo_khannda.svg';
-	import {
-		RiFileList3Line,
-		RiFileList3Fill,
-		RiLogoutBoxLine,
-		RiLogoutBoxRLine
-	} from 'svelte-icons/ri';
-	import { BsPeople, BsPeopleFill } from 'svelte-icons/bs';
-	import { MdOutlineSpaceDashboard, MdSpaceDashboard } from 'svelte-icons/md';
 	import { toasts } from '$lib/stores/toastStore';
 
 	let logoutHovered = false;
@@ -43,15 +36,15 @@
 			<NavItem
 				href="/clientes"
 				label="Clientes"
-				icon={BsPeople}
-				activeIcon={BsPeopleFill}
+				icon="people"
+				activeIcon="people-fill"
 				isActive={$page.url.pathname.startsWith('/clientes')}
 			/>
 			<NavItem
 				href="/contabilidad"
 				label="Contabilidad"
-				icon={MdOutlineSpaceDashboard}
-				activeIcon={MdSpaceDashboard}
+				icon="dashboard-outline"
+				activeIcon="dashboard"
 				isActive={$page.url.pathname.startsWith('/contabilidad')}
 			/>
 		</nav>
@@ -68,7 +61,7 @@
 				className="text-[var(--letter)] hover:bg-red-50 hover:text-red-500"
 			>
 				<span class="mr-2 text-xl">
-					{logoutHovered ? RiLogoutBoxRLine : RiLogoutBoxLine}
+					<Icon name="logout" size={20} />
 				</span>
 				<span class="hidden sm:inline">Salir</span>
 			</Button>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 
 	export let isOpen: boolean = false;
 	export let onClose: () => void = () => {};
@@ -31,20 +32,24 @@
 
 	// Prevenir scroll y añadir listener de ESC
 	onMount(() => {
-		originalOverflow = document.body.style.overflow;
-		if (isOpen) document.body.style.overflow = 'hidden';
-		window.addEventListener('keydown', handleKeydown);
+		if (browser) {
+			originalOverflow = document.body.style.overflow;
+			if (isOpen) document.body.style.overflow = 'hidden';
+			window.addEventListener('keydown', handleKeydown);
+		}
 	});
 
 	onDestroy(() => {
-		document.body.style.overflow = originalOverflow;
-		window.removeEventListener('keydown', handleKeydown);
+		if (browser) {
+			document.body.style.overflow = originalOverflow;
+			window.removeEventListener('keydown', handleKeydown);
+		}
 	});
 
 	// Vigilar cambios en isOpen
-	$: if (isOpen) {
+	$: if (browser && isOpen) {
 		document.body.style.overflow = 'hidden';
-	} else {
+	} else if (browser) {
 		document.body.style.overflow = originalOverflow;
 	}
 </script>

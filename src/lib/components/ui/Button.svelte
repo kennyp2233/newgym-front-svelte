@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Icon from './Icon.svelte';
+
 	export let type: 'button' | 'submit' = 'button';
 	export let variant:
 		| 'primary'
@@ -12,8 +14,9 @@
 	export let fullWidth = false;
 	export let isLoading = false;
 	export let disabled = false;
-	export let leftIcon: any = null;
-	export let rightIcon: any = null;
+	export let leftIcon: string = '';
+	export let rightIcon: string = '';
+	export let iconSize: number = 16;
 	export let className: string = '';
 </script>
 
@@ -37,9 +40,11 @@
 
     ${fullWidth && 'w-full'}
 
-	${className ? className : ''}
-  `}
+	${className}`}
 	disabled={isLoading || disabled}
+	on:click
+	on:mouseenter
+	on:mouseleave
 >
 	{#if isLoading}
 		<svg class="mr-2 -ml-1 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -52,10 +57,14 @@
 		</svg>
 	{/if}
 	{#if !isLoading && leftIcon}
-		<span class="mr-2">{@html leftIcon}</span>
+		<span class="mr-2">
+			<Icon name={leftIcon} size={iconSize} />
+		</span>
 	{/if}
 	<slot />
 	{#if !isLoading && rightIcon}
-		<span class="ml-2">{@html rightIcon}</span>
+		<span class="ml-2">
+			<Icon name={rightIcon} size={iconSize} />
+		</span>
 	{/if}
 </button>
