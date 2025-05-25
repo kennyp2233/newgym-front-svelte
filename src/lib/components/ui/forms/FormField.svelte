@@ -1,4 +1,4 @@
-<!-- src/lib/components/forms/FormField.svelte -->
+<!-- src/lib/components/ui/forms/FormField.svelte -->
 <script lang="ts">
 	import Input from '../Input.svelte';
 	import NumberInput from '../NumberInput.svelte';
@@ -23,11 +23,23 @@
 
 	// Props para integración con Felte
 	export let value: any = '';
-	export let errors: string[] = [];
-	export let touched: boolean = false;
+	export let errors: any = {};
+	export let touched: any = {};
 
-	$: error = touched && errors && errors.length > 0;
-	$: errorMessage = error ? errors[0] : '';
+	// Calcular error y mensaje de error correctamente para Felte
+	$: fieldErrors = errors[name] || [];
+	$: fieldTouched = touched[name] || false;
+	$: hasError = fieldTouched && Array.isArray(fieldErrors) && fieldErrors.length > 0;
+	$: errorMessage = hasError ? fieldErrors[0] : '';
+
+	// Para debug - remover en producción
+	$: console.log(`Field ${name}:`, {
+		value,
+		errors: fieldErrors,
+		touched: fieldTouched,
+		hasError,
+		errorMessage
+	});
 </script>
 
 {#if type === 'select'}
@@ -35,7 +47,7 @@
 		{name}
 		{label}
 		{options}
-		{error}
+		error={hasError}
 		{errorMessage}
 		{helperText}
 		{size}
@@ -49,7 +61,7 @@
 		{name}
 		{label}
 		{placeholder}
-		{error}
+		error={hasError}
 		{errorMessage}
 		{helperText}
 		{leftIcon}
@@ -71,7 +83,7 @@
 		{name}
 		{label}
 		{placeholder}
-		{error}
+		error={hasError}
 		{errorMessage}
 		{helperText}
 		{size}
@@ -90,7 +102,7 @@
 		{name}
 		{label}
 		{placeholder}
-		{error}
+		error={hasError}
 		{errorMessage}
 		{helperText}
 		{leftIcon}

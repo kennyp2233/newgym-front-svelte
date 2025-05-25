@@ -1,3 +1,4 @@
+<!-- src/lib/components/ui/Select.svelte -->
 <script lang="ts">
 	export let label = '';
 	export let helperText = '';
@@ -9,24 +10,36 @@
 	export let id = '';
 	export let name = '';
 	export let disabled = false;
+
+	// Crear un id único si no se proporciona
+	$: inputId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
+
+	// Manejar el evento change para actualizar el valor
+	function handleChange(event: Event) {
+		const target = event.target as HTMLSelectElement;
+		value = target.value;
+	}
 </script>
 
 <div class="w-full space-y-1.5">
 	{#if label}
-		<label for={id} class="text-md font-bold text-[var(--letter)]">{label}</label>
+		<label for={inputId} class="text-md font-bold text-[var(--letter)]">{label}</label>
 	{/if}
 
 	<div class="relative">
 		<select
-			{id}
+			id={inputId}
 			{name}
-			bind:value
-			class={`w-full appearance-none rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 pr-10
+			{value}
+			{disabled}
+			class={`w-full appearance-none rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 pr-10 focus:ring-2 focus:ring-offset-2 focus-visible:outline-none
         ${size === 'sm' && 'h-8 text-sm'}
         ${size === 'md' && 'h-10 text-base'}
         ${size === 'lg' && 'h-12 text-lg'}
         ${error && 'border-red-500 focus:ring-red-500'}`}
-			{disabled}
+			on:change={handleChange}
+			on:blur
+			on:focus
 		>
 			{#each options as opt}
 				<option value={opt.value}>{opt.label}</option>

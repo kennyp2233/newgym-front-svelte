@@ -1,8 +1,9 @@
-<!-- src/features/clientes/components/ClienteFormModal.svelte -->
+<!-- src/features/clientes/components/general/ClienteFormModal.svelte -->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createForm } from 'felte';
 	import { validator } from '@felte/validator-yup';
+	import { reporter } from '@felte/reporter-svelte';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
 	import StepProgress from '$lib/components/modals/StepProgress.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -17,6 +18,8 @@
 	import { planService, type Plan } from '../../../planes/api';
 	import { clienteService, TipoOcupacion, type RegistroCompletoDTO } from '../../api';
 	import { toasts } from '$lib/stores/toastStore';
+	import { get } from 'svelte/store';
+	import type { ValidationError } from 'yup';
 
 	export let isOpen = false;
 	export let onClose = () => {};
@@ -51,16 +54,21 @@
 	const stepSchemas = [informacionPersonalSchema, medidasSchema, resumenSchema];
 
 	// Crear formulario con valores iniciales
-	const { form, data, errors, touched, isValid, setData } = createForm<ClienteFormData>({
+	const { form, data, errors, touched, isValid, setData, validate } = createForm<any>({
 		initialValues: clienteToEdit || defaultClienteFormValues,
 		extend: [
-			validator<any>({ schema: stepSchemas[currentStep] as import('yup').ObjectSchema<any> })
+			validator({ schema: stepSchemas[currentStep] as import('yup').ObjectSchema<any> }),
+			reporter()
 		],
 		onSubmit: async (values) => {
 			if (isLastStep) {
 				await handleFinalSubmit(values);
 			} else {
-				handleNextStep();
+				// Validar paso actual antes de continuar
+				const isStepValid = await validateCurrentStep();
+				if (isStepValid) {
+					handleNextStep();
+				}
 			}
 		}
 	});
@@ -76,8 +84,35 @@
 	});
 
 	// Actualizar datos cuando cambie clienteToEdit
-	$: if (clienteToEdit) {
-		setData({ ...defaultClienteFormValues, ...clienteToEdit });
+	$: if (clienteToEdit && isOpen) {
+		const formData = { ...defaultClienteFormValues, ...clienteToEdit };
+		setData(formData);
+		currentStep = 0;
+	}
+
+	async function validateCurrentStep(): Promise<boolean> {
+		// Limpio errores previos
+		errors.set({});
+		touched.set({});
+
+		try {
+			await stepSchemas[currentStep].validate(get(data), { abortEarly: false });
+			return true;
+		} catch (err: any) {
+			if (err.inner && Array.isArray(err.inner)) {
+				const errObj: Record<string, string> = {};
+				const touchedObj: Record<string, boolean> = {};
+				(err.inner as ValidationError[]).forEach((e) => {
+					if (e.path) {
+						errObj[e.path] = e.message;
+						touchedObj[e.path] = true;
+					}
+				});
+				errors.set(errObj);
+				touched.set(touchedObj);
+			}
+			return false;
+		}
 	}
 
 	function handleNextStep() {
@@ -248,7 +283,20 @@
 
 	function handleUpdateField(event: CustomEvent) {
 		const { field, value } = event.detail as { field: keyof ClienteFormData; value: any };
-		$data[field] = value;
+
+		// Actualizar el valor en el store de felte
+		data.update((current) => ({
+			...current,
+			[field]: value
+		}));
+	}
+
+	// Función para manejar submit manual del botón
+	function handleManualSubmit() {
+		const formElement = document.querySelector('form[data-felte-form]') as HTMLFormElement;
+		if (formElement) {
+			formElement.requestSubmit();
+		}
 	}
 </script>
 
@@ -262,13 +310,13 @@
 		</div>
 	</svelte:fragment>
 
-	<form use:form>
+	<form use:form data-felte-form>
 		<div class="space-y-4">
 			<svelte:component
 				this={currentStepConfig.component}
 				formData={$data}
-				{errors}
-				{touched}
+				errors={$errors}
+				touched={$touched}
 				{planes}
 				on:updateField={handleUpdateField}
 			/>
@@ -281,9 +329,10 @@
 		</Button>
 		<Button
 			variant="primary"
-			type="submit"
-			disabled={!$isValid || isSubmitting}
+			type="button"
+			disabled={isSubmitting}
 			isLoading={isSubmitting}
+			on:click={handleManualSubmit}
 		>
 			{isLastStep ? (isEditing ? 'Actualizar Cliente' : 'Registrar Cliente') : 'Siguiente'}
 		</Button>

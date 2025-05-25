@@ -1,4 +1,4 @@
-<!-- src/features/clientes/components/ResumenStep.svelte -->
+<!-- src/features/clientes/components/general/ResumenStep.svelte -->
 <script lang="ts">
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
@@ -39,8 +39,8 @@
 			type="date"
 			minDate={new Date()}
 			bind:value={formData.fechaInicio}
-			errors={errors.fechaInicio}
-			touched={touched.fechaInicio}
+			{errors}
+			{touched}
 			on:change={handleFechaInicioChange}
 		/>
 		<div class="w-full space-y-1.5">

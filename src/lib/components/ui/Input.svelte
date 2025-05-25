@@ -1,3 +1,4 @@
+<!-- src/lib/components/ui/Input.svelte -->
 <script lang="ts">
 	import Icon from './Icon.svelte';
 
@@ -15,11 +16,23 @@
 	export let name = '';
 	export let placeholder = '';
 	export let disabled = false;
+	export let min: number | undefined = undefined;
+	export let max: number | undefined = undefined;
+	export let step: number | undefined = undefined;
+
+	// Crear un id único si no se proporciona
+	$: inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
+
+	// Manejar el evento input para actualizar el valor
+	function handleInput(event: Event) {
+		const target = event.target as HTMLInputElement;
+		value = target.value;
+	}
 </script>
 
 <div class="w-full space-y-1.5">
 	{#if label}
-		<label for={id} class="text-md font-bold text-[var(--letter)]">{label}</label>
+		<label for={inputId} class="text-md font-bold text-[var(--letter)]">{label}</label>
 	{/if}
 
 	<div class="relative flex items-center">
@@ -30,19 +43,22 @@
 		{/if}
 
 		<input
-			{id}
+			id={inputId}
 			{name}
 			{disabled}
-			bind:value
+			{value}
 			{type}
 			{placeholder}
+			{min}
+			{max}
+			{step}
 			class={`focus-visible:ring-ring w-full rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 focus:ring-2 focus:ring-offset-2 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50
         ${leftIcon ? 'pl-10' : ''} ${rightIcon || unit ? 'pr-14' : ''}
         ${size === 'sm' && 'h-8 text-sm'}
         ${size === 'md' && 'h-10 text-base'}
         ${size === 'lg' && 'h-12 text-lg'}
         ${error && 'border-red-500 focus:ring-red-500'}`}
-			on:input
+			on:input={handleInput}
 			on:change
 			on:keydown
 			on:focus

@@ -1,4 +1,4 @@
-<!-- src/features/clientes/components/MedidasStep.svelte -->
+<!-- src/features/clientes/components/general/MedidasStep.svelte -->
 <script lang="ts">
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
@@ -35,8 +35,8 @@
 			unit="kg"
 			type="number"
 			bind:value={formData.peso}
-			errors={errors.peso}
-			touched={touched.peso}
+			{errors}
+			{touched}
 			on:input={handlePesoChange}
 		/>
 		<FormField
@@ -46,8 +46,8 @@
 			unit="cm"
 			type="number"
 			bind:value={formData.altura}
-			errors={errors.altura}
-			touched={touched.altura}
+			{errors}
+			{touched}
 			on:input={handleAlturaChange}
 		/>
 	</FormRow>
@@ -61,8 +61,8 @@
 				unit="cm"
 				type="number"
 				bind:value={formData.brazos}
-				errors={errors.brazos}
-				touched={touched.brazos}
+				{errors}
+				{touched}
 			/>
 			<FormField
 				name="pantorrillas"
@@ -71,8 +71,8 @@
 				unit="cm"
 				type="number"
 				bind:value={formData.pantorrillas}
-				errors={errors.pantorrillas}
-				touched={touched.pantorrillas}
+				{errors}
+				{touched}
 			/>
 		</FormRow>
 
@@ -84,8 +84,8 @@
 				unit="cm"
 				type="number"
 				bind:value={formData.gluteo}
-				errors={errors.gluteo}
-				touched={touched.gluteo}
+				{errors}
+				{touched}
 			/>
 			<FormField
 				name="muslos"
@@ -94,8 +94,8 @@
 				unit="cm"
 				type="number"
 				bind:value={formData.muslos}
-				errors={errors.muslos}
-				touched={touched.muslos}
+				{errors}
+				{touched}
 			/>
 		</FormRow>
 
@@ -107,8 +107,8 @@
 				unit="cm"
 				type="number"
 				bind:value={formData.pecho}
-				errors={errors.pecho}
-				touched={touched.pecho}
+				{errors}
+				{touched}
 			/>
 			<FormField
 				name="cintura"
@@ -117,8 +117,8 @@
 				unit="cm"
 				type="number"
 				bind:value={formData.cintura}
-				errors={errors.cintura}
-				touched={touched.cintura}
+				{errors}
+				{touched}
 			/>
 		</FormRow>
 	{/if}

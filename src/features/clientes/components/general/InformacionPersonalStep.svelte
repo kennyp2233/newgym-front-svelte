@@ -1,4 +1,4 @@
-<!-- src/features/clientes/components/InformacionPersonalStep.svelte -->
+<!-- src/features/clientes/components/general/InformacionPersonalStep.svelte -->
 <script lang="ts">
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
@@ -66,16 +66,16 @@
 			label="Cédula"
 			placeholder="Ej: 0401010101"
 			bind:value={formData.cedula}
-			errors={errors.cedula}
-			touched={touched.cedula}
+			{errors}
+			{touched}
 		/>
 		<FormField
 			name="celular"
 			label="Celular"
 			placeholder="Ej: 0999999999"
 			bind:value={formData.celular}
-			errors={errors.celular}
-			touched={touched.celular}
+			{errors}
+			{touched}
 		/>
 	</FormRow>
 
@@ -85,16 +85,16 @@
 			label="Nombres"
 			placeholder="Ej: Kevin Mateo"
 			bind:value={formData.nombre}
-			errors={errors.nombre}
-			touched={touched.nombre}
+			{errors}
+			{touched}
 		/>
 		<FormField
 			name="apellido"
 			label="Apellidos"
 			placeholder="Ej: Cano Cruceñira"
 			bind:value={formData.apellido}
-			errors={errors.apellido}
-			touched={touched.apellido}
+			{errors}
+			{touched}
 		/>
 	</FormRow>
 
@@ -104,16 +104,16 @@
 			label="Ciudad"
 			placeholder="Ej: Tulcán"
 			bind:value={formData.ciudad}
-			errors={errors.ciudad}
-			touched={touched.ciudad}
+			{errors}
+			{touched}
 		/>
 		<FormField
 			name="pais"
 			label="País"
 			placeholder="Ej: Ecuador"
 			bind:value={formData.pais}
-			errors={errors.pais}
-			touched={touched.pais}
+			{errors}
+			{touched}
 		/>
 	</FormRow>
 
@@ -123,8 +123,8 @@
 			label="Dirección"
 			placeholder="Ej: Calle 1, Casa 2"
 			bind:value={formData.direccion}
-			errors={errors.direccion}
-			touched={touched.direccion}
+			{errors}
+			{touched}
 		/>
 		<div class="space-y-1.5">
 			<FormField
@@ -133,8 +133,8 @@
 				type="date"
 				maxDate={new Date()}
 				bind:value={formData.fechaNacimiento}
-				errors={errors.fechaNacimiento}
-				touched={touched.fechaNacimiento}
+				{errors}
+				{touched}
 			/>
 			{#if formData.fechaNacimiento}
 				<p class="text-sm text-gray-500">
@@ -151,8 +151,8 @@
 			type="email"
 			placeholder="Ej: nombre@gmail.com"
 			bind:value={formData.correo}
-			errors={errors.correo}
-			touched={touched.correo}
+			{errors}
+			{touched}
 		/>
 		<FormField
 			name="ocupacion"
@@ -164,8 +164,8 @@
 				{ value: TipoOcupacion.NINO, label: 'Niño' }
 			]}
 			bind:value={formData.ocupacion}
-			errors={errors.ocupacion}
-			touched={touched.ocupacion}
+			{errors}
+			{touched}
 			on:change={handleOcupacionChange}
 		/>
 	</FormRow>
@@ -183,8 +183,8 @@
 				}))
 			]}
 			bind:value={formData.idPlan}
-			errors={errors.idPlan}
-			touched={touched.idPlan}
+			{errors}
+			{touched}
 			helperText={planesFiltrados.length === 0
 				? 'No hay planes disponibles para esta ocupación'
 				: formData.ocupacion === TipoOcupacion.NINO
@@ -199,8 +199,8 @@
 			placeholder="Ej: Albañil"
 			disabled={formData.ocupacion !== TipoOcupacion.TRABAJO}
 			bind:value={formData.puestoTrabajo}
-			errors={errors.puestoTrabajo}
-			touched={touched.puestoTrabajo}
+			{errors}
+			{touched}
 			helperText={formData.ocupacion !== TipoOcupacion.TRABAJO
 				? 'No aplica para esta ocupación'
 				: ''}
