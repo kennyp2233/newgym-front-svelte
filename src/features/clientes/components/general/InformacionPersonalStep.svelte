@@ -32,18 +32,18 @@
 		const target = e.target as HTMLSelectElement;
 		const nuevaOcupacion = target.value;
 
+		// Emitir cambio de ocupación
 		dispatch('updateField', { field: 'ocupacion', value: nuevaOcupacion });
 
-		// Actualizar plan automáticamente
-		const planesFiltrados = filterPlanesPorOcupacion(nuevaOcupacion);
-		if (planesFiltrados.length > 0) {
-			dispatch('updateField', { field: 'idPlan', value: planesFiltrados[0].idPlan.toString() });
-		}
+		// La selección automática del plan se maneja en el componente padre
+		// para mantener la lógica centralizada
+	}
 
-		// Limpiar puesto de trabajo si no es Trabajo
-		if (nuevaOcupacion !== TipoOcupacion.TRABAJO) {
-			dispatch('updateField', { field: 'puestoTrabajo', value: '' });
-		}
+	function handleFieldChange(field: string) {
+		return (e: Event) => {
+			const target = e.target as HTMLInputElement | HTMLSelectElement;
+			dispatch('updateField', { field, value: target.value });
+		};
 	}
 
 	function calcularEdad(fecha: string): number {
@@ -57,6 +57,22 @@
 		}
 		return edad;
 	}
+
+	// Helper para obtener el mensaje de ayuda del plan
+	function getPlanHelperText(): string {
+		if (planesFiltrados.length === 0) {
+			return 'No hay planes disponibles para esta ocupación';
+		}
+
+		switch (formData.ocupacion) {
+			case TipoOcupacion.NINO:
+				return 'Solo está disponible el Plan de Niño para esta ocupación';
+			case TipoOcupacion.ESTUDIANTE:
+				return 'Solo está disponible el Plan de Estudiante para esta ocupación';
+			default:
+				return 'Seleccione un plan';
+		}
+	}
 </script>
 
 <div class="space-y-4">
@@ -65,17 +81,19 @@
 			name="cedula"
 			label="Cédula"
 			placeholder="Ej: 0401010101"
-			bind:value={formData.cedula}
+			value={formData.cedula || ''}
 			{errors}
 			{touched}
+			on:input={handleFieldChange('cedula')}
 		/>
 		<FormField
 			name="celular"
 			label="Celular"
 			placeholder="Ej: 0999999999"
-			bind:value={formData.celular}
+			value={formData.celular || ''}
 			{errors}
 			{touched}
+			on:input={handleFieldChange('celular')}
 		/>
 	</FormRow>
 
@@ -84,17 +102,19 @@
 			name="nombre"
 			label="Nombres"
 			placeholder="Ej: Kevin Mateo"
-			bind:value={formData.nombre}
+			value={formData.nombre || ''}
 			{errors}
 			{touched}
+			on:input={handleFieldChange('nombre')}
 		/>
 		<FormField
 			name="apellido"
 			label="Apellidos"
 			placeholder="Ej: Cano Cruceñira"
-			bind:value={formData.apellido}
+			value={formData.apellido || ''}
 			{errors}
 			{touched}
+			on:input={handleFieldChange('apellido')}
 		/>
 	</FormRow>
 
@@ -103,17 +123,19 @@
 			name="ciudad"
 			label="Ciudad"
 			placeholder="Ej: Tulcán"
-			bind:value={formData.ciudad}
+			value={formData.ciudad || ''}
 			{errors}
 			{touched}
+			on:input={handleFieldChange('ciudad')}
 		/>
 		<FormField
 			name="pais"
 			label="País"
 			placeholder="Ej: Ecuador"
-			bind:value={formData.pais}
+			value={formData.pais || ''}
 			{errors}
 			{touched}
+			on:input={handleFieldChange('pais')}
 		/>
 	</FormRow>
 
@@ -122,9 +144,10 @@
 			name="direccion"
 			label="Dirección"
 			placeholder="Ej: Calle 1, Casa 2"
-			bind:value={formData.direccion}
+			value={formData.direccion || ''}
 			{errors}
 			{touched}
+			on:input={handleFieldChange('direccion')}
 		/>
 		<div class="space-y-1.5">
 			<FormField
@@ -132,9 +155,10 @@
 				label="Fecha de Nacimiento"
 				type="date"
 				maxDate={new Date()}
-				bind:value={formData.fechaNacimiento}
+				value={formData.fechaNacimiento || ''}
 				{errors}
 				{touched}
+				on:change={handleFieldChange('fechaNacimiento')}
 			/>
 			{#if formData.fechaNacimiento}
 				<p class="text-sm text-gray-500">
@@ -150,9 +174,10 @@
 			label="Correo Electrónico"
 			type="email"
 			placeholder="Ej: nombre@gmail.com"
-			bind:value={formData.correo}
+			value={formData.correo || ''}
 			{errors}
 			{touched}
+			on:input={handleFieldChange('correo')}
 		/>
 		<FormField
 			name="ocupacion"
@@ -163,7 +188,7 @@
 				{ value: TipoOcupacion.ESTUDIANTE, label: 'Estudiante' },
 				{ value: TipoOcupacion.NINO, label: 'Niño' }
 			]}
-			bind:value={formData.ocupacion}
+			value={formData.ocupacion || TipoOcupacion.ESTUDIANTE}
 			{errors}
 			{touched}
 			on:change={handleOcupacionChange}
@@ -182,28 +207,24 @@
 					label: `${plan.nombre} (${plan.duracionMeses} ${plan.duracionMeses === 1 ? 'mes' : 'meses'}) - $${plan.precio}`
 				}))
 			]}
-			bind:value={formData.idPlan}
+			value={formData.idPlan || ''}
 			{errors}
 			{touched}
-			helperText={planesFiltrados.length === 0
-				? 'No hay planes disponibles para esta ocupación'
-				: formData.ocupacion === TipoOcupacion.NINO
-					? 'Solo está disponible el Plan de Niño para esta ocupación'
-					: formData.ocupacion === TipoOcupacion.ESTUDIANTE
-						? 'Solo está disponible el Plan de Estudiante para esta ocupación'
-						: 'Seleccione un plan'}
+			helperText={getPlanHelperText()}
+			on:change={handleFieldChange('idPlan')}
 		/>
 		<FormField
 			name="puestoTrabajo"
 			label="Puesto de trabajo"
 			placeholder="Ej: Albañil"
 			disabled={formData.ocupacion !== TipoOcupacion.TRABAJO}
-			bind:value={formData.puestoTrabajo}
+			value={formData.puestoTrabajo || ''}
 			{errors}
 			{touched}
 			helperText={formData.ocupacion !== TipoOcupacion.TRABAJO
 				? 'No aplica para esta ocupación'
 				: ''}
+			on:input={handleFieldChange('puestoTrabajo')}
 		/>
 	</FormRow>
 </div>

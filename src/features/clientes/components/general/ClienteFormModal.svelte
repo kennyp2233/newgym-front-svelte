@@ -30,6 +30,7 @@
 	let currentStep = 0;
 	let planes: Plan[] = [];
 	let isSubmitting = false;
+	let skipMedidas = false; // Nueva variable para omitir medidas
 
 	const steps = [
 		{
@@ -38,7 +39,8 @@
 		},
 		{
 			title: isEditing ? 'Actualizar medidas del cliente' : 'Medidas del cliente',
-			component: MedidasStep
+			component: MedidasStep,
+			optional: true // Marcar como opcional
 		},
 		{
 			title: isEditing ? 'Actualizar detalles de la membresía' : 'Detalles de la membresía',
@@ -49,32 +51,58 @@
 	$: currentStepConfig = steps[currentStep];
 	$: isLastStep = currentStep === steps.length - 1;
 	$: isFirstStep = currentStep === 0;
+	$: isMedidasStep = currentStep === 1;
 
 	const { informacionPersonalSchema, medidasSchema, resumenSchema } = getStepValidationSchemas();
-	const stepSchemas = [informacionPersonalSchema, medidasSchema, resumenSchema];
+
+	// Función para obtener el schema actual basado en el paso y si se omiten medidas
+	function getCurrentSchema() {
+		if (currentStep === 0) return informacionPersonalSchema;
+		if (currentStep === 1) {
+			// Si se omiten medidas, usar un schema más permisivo
+			return skipMedidas ? informacionPersonalSchema : medidasSchema;
+		}
+		if (currentStep === 2) return resumenSchema;
+		return informacionPersonalSchema;
+	}
 
 	// Crear formulario con valores iniciales
-	const { form, data, errors, touched, isValid, setData, validate } = createForm<any>({
-		initialValues: clienteToEdit || defaultClienteFormValues,
-		extend: [
-			validator({ schema: stepSchemas[currentStep] as import('yup').ObjectSchema<any> }),
-			reporter()
-		],
-		onSubmit: async (values) => {
-			if (isLastStep) {
-				await handleFinalSubmit(values);
-			} else {
-				// Validar paso actual antes de continuar
-				const isStepValid = await validateCurrentStep();
-				if (isStepValid) {
-					handleNextStep();
+	let form: any;
+	let data: any;
+	let errors: any;
+	let touched: any;
+	let isValid: any;
+	let setData: any;
+
+	// Función para reinicializar el formulario con nuevo schema
+	function initializeForm() {
+		const formInstance = createForm<any>({
+			initialValues: clienteToEdit || defaultClienteFormValues,
+			extend: [validator({ schema: getCurrentSchema() as any }), reporter()],
+			onSubmit: async (values) => {
+				if (isLastStep) {
+					await handleFinalSubmit(values);
+				} else {
+					const isStepValid = await validateCurrentStep();
+					if (isStepValid) {
+						handleNextStep();
+					}
 				}
 			}
-		}
-	});
+		});
 
-	// Cargar planes al montar
+		form = formInstance.form;
+		data = formInstance.data;
+		errors = formInstance.errors;
+		touched = formInstance.touched;
+		isValid = formInstance.isValid;
+		setData = formInstance.setData;
+	}
+
+	// Inicializar formulario al montar
 	onMount(async () => {
+		initializeForm();
+
 		try {
 			planes = await planService.getPlanes();
 		} catch (error) {
@@ -83,31 +111,47 @@
 		}
 	});
 
+	// Reinicializar cuando cambie el paso o skipMedidas
+	$: if (form && (currentStep >= 0 || skipMedidas !== undefined)) {
+		// Reinicializar con nuevo schema
+		setTimeout(() => {
+			initializeForm();
+		}, 0);
+	}
+
 	// Actualizar datos cuando cambie clienteToEdit
-	$: if (clienteToEdit && isOpen) {
+	$: if (clienteToEdit && isOpen && setData) {
 		const formData = { ...defaultClienteFormValues, ...clienteToEdit };
 		setData(formData);
 		currentStep = 0;
+		skipMedidas = false;
 	}
 
 	async function validateCurrentStep(): Promise<boolean> {
-		// Limpio errores previos
+		if (!errors || !touched) return false;
+
+		// Limpiar errores previos
 		errors.set({});
 		touched.set({});
 
 		try {
-			await stepSchemas[currentStep].validate(get(data), { abortEarly: false });
+			const currentSchema = getCurrentSchema();
+			await currentSchema.validate(get(data), { abortEarly: false });
 			return true;
 		} catch (err: any) {
 			if (err.inner && Array.isArray(err.inner)) {
-				const errObj: Record<string, string> = {};
+				const errObj: Record<string, string[]> = {};
 				const touchedObj: Record<string, boolean> = {};
+
 				(err.inner as ValidationError[]).forEach((e) => {
 					if (e.path) {
-						errObj[e.path] = e.message;
+						// Felte espera arrays de errores
+						if (!errObj[e.path]) errObj[e.path] = [];
+						errObj[e.path].push(e.message);
 						touchedObj[e.path] = true;
 					}
 				});
+
 				errors.set(errObj);
 				touched.set(touchedObj);
 			}
@@ -118,30 +162,57 @@
 	function handleNextStep() {
 		if (currentStep < steps.length - 1) {
 			currentStep++;
+			// Si el siguiente paso es medidas y se omiten, saltar
+			if (currentStep === 1 && skipMedidas) {
+				currentStep++;
+			}
 		}
 	}
 
 	function handlePrevStep() {
 		if (currentStep > 0) {
 			currentStep--;
+			// Si el paso anterior es medidas y se omitieron, saltar hacia atrás
+			if (currentStep === 1 && skipMedidas) {
+				currentStep--;
+			}
 		} else {
 			onClose();
 		}
 	}
 
+	// Nueva función para omitir medidas
+	function handleSkipMedidas() {
+		skipMedidas = true;
+		// Limpiar datos de medidas excepto peso y altura básicos
+		if (data && setData) {
+			const currentData = get(data);
+			setData({
+				...(typeof currentData === 'object' && currentData !== null ? currentData : {}),
+				brazos: '',
+				pantorrillas: '',
+				gluteo: '',
+				muslos: '',
+				pecho: '',
+				cintura: '',
+				cuello: ''
+			});
+		}
+		handleNextStep();
+	}
+
 	async function handleFinalSubmit(formData: ClienteFormData) {
 		isSubmitting = true;
 		try {
-			// Validaciones previas
 			if (!validateFormData(formData)) return;
 
 			const registroData = prepareRegistroData(formData);
 			await onSubmit(registroData);
 
 			if (!isEditing) {
-				// Resetear formulario para nuevo registro
 				setData(defaultClienteFormValues);
 				currentStep = 0;
+				skipMedidas = false;
 			}
 		} catch (error: any) {
 			handleSubmitError(error, formData);
@@ -165,22 +236,8 @@
 			return false;
 		}
 
-		// Validar medidas según ocupación
-		if (formData.ocupacion === TipoOcupacion.NINO) {
-			const camposExcedentes = [
-				'brazos',
-				'pantorrillas',
-				'gluteo',
-				'muslos',
-				'pecho',
-				'cintura',
-				'cuello'
-			].filter((campo) => formData[campo as keyof ClienteFormData]);
-
-			if (camposExcedentes.length > 0) {
-				toasts.showToast('Para niños, solo se deben registrar peso y altura', 'warning');
-			}
-		} else {
+		// Solo validar medidas si no se omitieron y no es niño
+		if (!skipMedidas && formData.ocupacion !== TipoOcupacion.NINO) {
 			const camposFaltantes = [
 				'brazos',
 				'pantorrillas',
@@ -206,36 +263,39 @@
 
 		const fechaFin = planService.calcularFechaFin(formData.fechaInicio, duracionMeses);
 
-		// Calcular IMC
-		const alturaNumero = parseFloat(formData.altura);
-		const pesoNumero = parseFloat(formData.peso);
-		const alturaMetros = alturaNumero > 3 ? alturaNumero / 100 : alturaNumero;
-		const imc = pesoNumero / (alturaMetros * alturaMetros);
+		// Calcular IMC solo si hay peso y altura
+		let imc = 0;
+		let categoriaPeso = 'No calculado';
 
-		let categoriaPeso = '';
-		if (imc < 18.5) categoriaPeso = 'Bajo peso';
-		else if (imc < 25) categoriaPeso = 'Normal';
-		else if (imc < 30) categoriaPeso = 'Sobrepeso';
-		else categoriaPeso = 'Obesidad';
+		if (formData.peso && formData.altura) {
+			const alturaNumero = parseFloat(formData.altura);
+			const pesoNumero = parseFloat(formData.peso);
+			const alturaMetros = alturaNumero > 3 ? alturaNumero / 100 : alturaNumero;
+			imc = pesoNumero / (alturaMetros * alturaMetros);
+
+			if (imc < 18.5) categoriaPeso = 'Bajo peso';
+			else if (imc < 25) categoriaPeso = 'Normal';
+			else if (imc < 30) categoriaPeso = 'Sobrepeso';
+			else categoriaPeso = 'Obesidad';
+		}
 
 		const esNino = formData.ocupacion === TipoOcupacion.NINO;
 
 		const medidasDTO = {
-			peso: parseFloat(formData.peso),
-			altura: parseFloat(formData.altura),
-			...(esNino
+			...(formData.peso && { peso: parseFloat(formData.peso) }),
+			...(formData.altura && { altura: parseFloat(formData.altura) }),
+			...(skipMedidas || esNino
 				? {}
 				: {
-						brazos: parseFloat(formData.brazos),
-						pantorrillas: parseFloat(formData.pantorrillas),
-						gluteo: parseFloat(formData.gluteo),
-						muslos: parseFloat(formData.muslos),
-						pecho: parseFloat(formData.pecho),
-						cintura: parseFloat(formData.cintura),
-						cuello: formData.cuello ? parseFloat(formData.cuello) : undefined
+						...(formData.brazos && { brazos: parseFloat(formData.brazos) }),
+						...(formData.pantorrillas && { pantorrillas: parseFloat(formData.pantorrillas) }),
+						...(formData.gluteo && { gluteo: parseFloat(formData.gluteo) }),
+						...(formData.muslos && { muslos: parseFloat(formData.muslos) }),
+						...(formData.pecho && { pecho: parseFloat(formData.pecho) }),
+						...(formData.cintura && { cintura: parseFloat(formData.cintura) }),
+						...(formData.cuello && { cuello: parseFloat(formData.cuello) })
 					}),
-			imc: parseFloat(imc.toFixed(2)),
-			categoriaPeso
+			...(imc > 0 && { imc: parseFloat(imc.toFixed(2)), categoriaPeso })
 		};
 
 		return {
@@ -284,11 +344,38 @@
 	function handleUpdateField(event: CustomEvent) {
 		const { field, value } = event.detail as { field: keyof ClienteFormData; value: any };
 
+		if (!data) return;
+
 		// Actualizar el valor en el store de felte
-		data.update((current) => ({
-			...current,
-			[field]: value
-		}));
+		data.update((current: any) => {
+			const newData = { ...current, [field]: value };
+
+			// Lógica para selección automática de planes
+			if (field === 'ocupacion') {
+				const ocupacion = value as TipoOcupacion;
+				let planesFiltrados: Plan[] = [];
+
+				if (ocupacion === TipoOcupacion.NINO) {
+					planesFiltrados = planes.filter((plan) => plan.tag === 'Niño');
+				} else if (ocupacion === TipoOcupacion.ESTUDIANTE) {
+					planesFiltrados = planes.filter((plan) => plan.tag === 'Estudiante');
+				} else {
+					planesFiltrados = planes.filter((plan) => plan.tag === 'Trabajo');
+				}
+
+				// Seleccionar automáticamente el primer plan disponible
+				if (planesFiltrados.length > 0) {
+					newData.idPlan = planesFiltrados[0].idPlan.toString();
+				}
+
+				// Limpiar puesto de trabajo si no es Trabajo
+				if (ocupacion !== TipoOcupacion.TRABAJO) {
+					newData.puestoTrabajo = '';
+				}
+			}
+
+			return newData;
+		});
 	}
 
 	// Función para manejar submit manual del botón
@@ -310,31 +397,42 @@
 		</div>
 	</svelte:fragment>
 
-	<form use:form data-felte-form>
-		<div class="space-y-4">
-			<svelte:component
-				this={currentStepConfig.component}
-				formData={$data}
-				errors={$errors}
-				touched={$touched}
-				{planes}
-				on:updateField={handleUpdateField}
-			/>
-		</div>
-	</form>
+	{#if form}
+		<form use:form data-felte-form>
+			<div class="space-y-4">
+				<svelte:component
+					this={currentStepConfig.component}
+					formData={$data}
+					errors={$errors}
+					touched={$touched}
+					{planes}
+					on:updateField={handleUpdateField}
+				/>
+			</div>
+		</form>
+	{/if}
 
 	<svelte:fragment slot="footer">
-		<Button variant="outline" type="button" on:click={handlePrevStep}>
-			{isFirstStep ? 'Cancelar' : 'Regresar'}
-		</Button>
-		<Button
-			variant="primary"
-			type="button"
-			disabled={isSubmitting}
-			isLoading={isSubmitting}
-			on:click={handleManualSubmit}
-		>
-			{isLastStep ? (isEditing ? 'Actualizar Cliente' : 'Registrar Cliente') : 'Siguiente'}
-		</Button>
+		<div class="flex w-full justify-between">
+			<Button variant="outline" type="button" on:click={handlePrevStep}>
+				{isFirstStep ? 'Cancelar' : 'Regresar'}
+			</Button>
+
+			<div class="flex gap-2">
+				{#if isMedidasStep && !skipMedidas}
+					<Button variant="ghost" type="button" on:click={handleSkipMedidas}>Omitir Medidas</Button>
+				{/if}
+
+				<Button
+					variant="primary"
+					type="button"
+					disabled={isSubmitting}
+					isLoading={isSubmitting}
+					on:click={handleManualSubmit}
+				>
+					{isLastStep ? (isEditing ? 'Actualizar Cliente' : 'Registrar Cliente') : 'Siguiente'}
+				</Button>
+			</div>
+		</div>
 	</svelte:fragment>
 </BaseModal>

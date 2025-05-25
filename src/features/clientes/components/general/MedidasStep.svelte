@@ -3,6 +3,7 @@
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
 	import { calcularIMC } from '$lib/utils';
+	import { TipoOcupacion } from '../../api';
 	import { createEventDispatcher } from 'svelte';
 
 	export let formData: any;
@@ -11,18 +12,15 @@
 
 	const dispatch = createEventDispatcher();
 
-	$: isNino = formData.ocupacion === 'Niño';
+	$: isNino = formData.ocupacion === TipoOcupacion.NINO;
 	$: imcData = calcularIMC(parseFloat(formData.peso || '0'), parseFloat(formData.altura || '0'));
 	$: imc = imcData ? `${imcData.imc} - ${imcData.categoria}` : 'Pendiente de cálculo';
 
-	function handlePesoChange(e: Event) {
-		const target = e.target as HTMLInputElement;
-		dispatch('updateField', { field: 'peso', value: target.value });
-	}
-
-	function handleAlturaChange(e: Event) {
-		const target = e.target as HTMLInputElement;
-		dispatch('updateField', { field: 'altura', value: target.value });
+	function handleFieldChange(field: string) {
+		return (e: Event) => {
+			const target = e.target as HTMLInputElement;
+			dispatch('updateField', { field, value: target.value });
+		};
 	}
 </script>
 
@@ -34,10 +32,10 @@
 			placeholder="Ej: 55"
 			unit="kg"
 			type="number"
-			bind:value={formData.peso}
+			value={formData.peso || ''}
 			{errors}
 			{touched}
-			on:input={handlePesoChange}
+			on:input={handleFieldChange('peso')}
 		/>
 		<FormField
 			name="altura"
@@ -45,10 +43,10 @@
 			placeholder="Ej: 170"
 			unit="cm"
 			type="number"
-			bind:value={formData.altura}
+			value={formData.altura || ''}
 			{errors}
 			{touched}
-			on:input={handleAlturaChange}
+			on:input={handleFieldChange('altura')}
 		/>
 	</FormRow>
 
@@ -60,9 +58,10 @@
 				placeholder="Ej: 55.5"
 				unit="cm"
 				type="number"
-				bind:value={formData.brazos}
+				value={formData.brazos || ''}
 				{errors}
 				{touched}
+				on:input={handleFieldChange('brazos')}
 			/>
 			<FormField
 				name="pantorrillas"
@@ -70,9 +69,10 @@
 				placeholder="Ej: 55.5"
 				unit="cm"
 				type="number"
-				bind:value={formData.pantorrillas}
+				value={formData.pantorrillas || ''}
 				{errors}
 				{touched}
+				on:input={handleFieldChange('pantorrillas')}
 			/>
 		</FormRow>
 
@@ -83,9 +83,10 @@
 				placeholder="Ej: 55.5"
 				unit="cm"
 				type="number"
-				bind:value={formData.gluteo}
+				value={formData.gluteo || ''}
 				{errors}
 				{touched}
+				on:input={handleFieldChange('gluteo')}
 			/>
 			<FormField
 				name="muslos"
@@ -93,9 +94,10 @@
 				placeholder="Ej: 55.5"
 				unit="cm"
 				type="number"
-				bind:value={formData.muslos}
+				value={formData.muslos || ''}
 				{errors}
 				{touched}
+				on:input={handleFieldChange('muslos')}
 			/>
 		</FormRow>
 
@@ -106,9 +108,10 @@
 				placeholder="Ej: 55.5"
 				unit="cm"
 				type="number"
-				bind:value={formData.pecho}
+				value={formData.pecho || ''}
 				{errors}
 				{touched}
+				on:input={handleFieldChange('pecho')}
 			/>
 			<FormField
 				name="cintura"
@@ -116,17 +119,42 @@
 				placeholder="Ej: 55.5"
 				unit="cm"
 				type="number"
-				bind:value={formData.cintura}
+				value={formData.cintura || ''}
 				{errors}
 				{touched}
+				on:input={handleFieldChange('cintura')}
 			/>
+		</FormRow>
+
+		<FormRow>
+			<FormField
+				name="cuello"
+				label="Cuello (Opcional)"
+				placeholder="Ej: 35.5"
+				unit="cm"
+				type="number"
+				value={formData.cuello || ''}
+				{errors}
+				{touched}
+				on:input={handleFieldChange('cuello')}
+			/>
+			<div></div>
+			<!-- Espacio vacío para mantener la estructura de 2 columnas -->
 		</FormRow>
 	{/if}
 
-	<div class="bg-opacity-10 mt-6 flex flex-col items-center justify-center gap-2 rounded-md p-4">
-		<span>Índice de Masa Corporal (IMC)</span>
+	<div
+		class="bg-opacity-10 mt-6 flex flex-col items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--sections)] p-4"
+	>
+		<span class="text-sm font-medium text-[var(--letter)]">Índice de Masa Corporal (IMC)</span>
 		<p class="text-center text-xl font-bold text-[var(--letter)]">
 			{imc}
 		</p>
+		{#if !isNino}
+			<p class="mt-2 text-center text-xs text-gray-500">
+				💡 <strong>Tip:</strong> Puedes omitir las medidas detalladas si solo necesitas registrar datos
+				básicos del cliente.
+			</p>
+		{/if}
 	</div>
 </div>

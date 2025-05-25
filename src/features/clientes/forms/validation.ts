@@ -132,37 +132,63 @@ export const getStepValidationSchemas = () => {
                 then: (schema) => schema.required('El puesto de trabajo es requerido para trabajadores'),
                 otherwise: (schema) => schema.notRequired(),
             }),
+
+        // Agregar campos que pueden estar presentes pero no requeridos en este paso
+        peso: yup.string().notRequired(),
+        altura: yup.string().notRequired(),
+        brazos: yup.string().notRequired(),
+        pantorrillas: yup.string().notRequired(),
+        gluteo: yup.string().notRequired(),
+        muslos: yup.string().notRequired(),
+        pecho: yup.string().notRequired(),
+        cintura: yup.string().notRequired(),
+        cuello: yup.string().notRequired(),
+        fechaInicio: yup.string().notRequired(),
     });
 
-    // Paso 2: Medidas
+    // Paso 2: Medidas (más flexible)
     const medidasSchema = yup.object().shape({
+        // Campos básicos siempre requeridos
         peso: yup
             .string()
-            .required('El peso es requerido')
+            .test('is-required-or-empty', 'El peso es requerido', function (value) {
+                // Si hay altura, peso es requerido
+                const altura = this.parent.altura;
+                if (altura && altura.trim() !== '') {
+                    return !!(value && value.trim() !== '');
+                }
+                return true; // Si no hay altura, peso puede estar vacío
+            })
             .test('is-valid-weight', 'El peso debe estar entre 1 y 300 kg', function (value) {
-                if (!value) return false;
+                if (!value || value.trim() === '') return true; // Si está vacío, no validar rango
                 const peso = parseFloat(value);
                 return !isNaN(peso) && peso > 0 && peso <= 300;
             }),
 
         altura: yup
             .string()
-            .required('La altura es requerida')
+            .test('is-required-or-empty', 'La altura es requerida', function (value) {
+                // Si hay peso, altura es requerida
+                const peso = this.parent.peso;
+                if (peso && peso.trim() !== '') {
+                    return !!(value && value.trim() !== '');
+                }
+                return true; // Si no hay peso, altura puede estar vacía
+            })
             .test('is-valid-height', 'La altura debe estar entre 30 y 250 cm', function (value) {
-                if (!value) return false;
+                if (!value || value.trim() === '') return true; // Si está vacío, no validar rango
                 const altura = parseFloat(value);
                 return !isNaN(altura) && altura >= 30 && altura <= 250;
             }),
 
-        // Medidas condicionales según la ocupación
+        // Medidas detalladas - condicionales y opcionales
         brazos: yup
             .string()
-            .when('ocupacion', {
+            .when(['ocupacion'], {
                 is: (ocupacion: string) => ocupacion !== TipoOcupacion.NINO,
                 then: (schema) => schema
-                    .required('La medida de brazos es requerida')
                     .test('is-valid-brazos', 'La medida de brazos debe ser válida', function (value) {
-                        if (!value) return false;
+                        if (!value || value.trim() === '') return true; // Opcional
                         const medida = parseFloat(value);
                         return !isNaN(medida) && medida > 0 && medida <= 200;
                     }),
@@ -171,12 +197,11 @@ export const getStepValidationSchemas = () => {
 
         pantorrillas: yup
             .string()
-            .when('ocupacion', {
+            .when(['ocupacion'], {
                 is: (ocupacion: string) => ocupacion !== TipoOcupacion.NINO,
                 then: (schema) => schema
-                    .required('La medida de pantorrillas es requerida')
                     .test('is-valid-pantorrillas', 'La medida de pantorrillas debe ser válida', function (value) {
-                        if (!value) return false;
+                        if (!value || value.trim() === '') return true; // Opcional
                         const medida = parseFloat(value);
                         return !isNaN(medida) && medida > 0 && medida <= 200;
                     }),
@@ -185,12 +210,11 @@ export const getStepValidationSchemas = () => {
 
         gluteo: yup
             .string()
-            .when('ocupacion', {
+            .when(['ocupacion'], {
                 is: (ocupacion: string) => ocupacion !== TipoOcupacion.NINO,
                 then: (schema) => schema
-                    .required('La medida de glúteo es requerida')
                     .test('is-valid-gluteo', 'La medida de glúteo debe ser válida', function (value) {
-                        if (!value) return false;
+                        if (!value || value.trim() === '') return true; // Opcional
                         const medida = parseFloat(value);
                         return !isNaN(medida) && medida > 0 && medida <= 200;
                     }),
@@ -199,12 +223,11 @@ export const getStepValidationSchemas = () => {
 
         muslos: yup
             .string()
-            .when('ocupacion', {
+            .when(['ocupacion'], {
                 is: (ocupacion: string) => ocupacion !== TipoOcupacion.NINO,
                 then: (schema) => schema
-                    .required('La medida de muslos es requerida')
                     .test('is-valid-muslos', 'La medida de muslos debe ser válida', function (value) {
-                        if (!value) return false;
+                        if (!value || value.trim() === '') return true; // Opcional
                         const medida = parseFloat(value);
                         return !isNaN(medida) && medida > 0 && medida <= 200;
                     }),
@@ -213,12 +236,11 @@ export const getStepValidationSchemas = () => {
 
         pecho: yup
             .string()
-            .when('ocupacion', {
+            .when(['ocupacion'], {
                 is: (ocupacion: string) => ocupacion !== TipoOcupacion.NINO,
                 then: (schema) => schema
-                    .required('La medida de pecho es requerida')
                     .test('is-valid-pecho', 'La medida de pecho debe ser válida', function (value) {
-                        if (!value) return false;
+                        if (!value || value.trim() === '') return true; // Opcional
                         const medida = parseFloat(value);
                         return !isNaN(medida) && medida > 0 && medida <= 200;
                     }),
@@ -227,12 +249,11 @@ export const getStepValidationSchemas = () => {
 
         cintura: yup
             .string()
-            .when('ocupacion', {
+            .when(['ocupacion'], {
                 is: (ocupacion: string) => ocupacion !== TipoOcupacion.NINO,
                 then: (schema) => schema
-                    .required('La medida de cintura es requerida')
                     .test('is-valid-cintura', 'La medida de cintura debe ser válida', function (value) {
-                        if (!value) return false;
+                        if (!value || value.trim() === '') return true; // Opcional
                         const medida = parseFloat(value);
                         return !isNaN(medida) && medida > 0 && medida <= 200;
                     }),
@@ -243,10 +264,25 @@ export const getStepValidationSchemas = () => {
             .string()
             .optional()
             .test('is-valid-cuello', 'La medida de cuello debe ser válida', function (value) {
-                if (!value) return true; // Es opcional
+                if (!value || value.trim() === '') return true; // Es opcional
                 const medida = parseFloat(value);
                 return !isNaN(medida) && medida > 0 && medida <= 100;
             }),
+
+        // Incluir campos que pueden estar presentes
+        cedula: yup.string().notRequired(),
+        celular: yup.string().notRequired(),
+        nombre: yup.string().notRequired(),
+        apellido: yup.string().notRequired(),
+        ciudad: yup.string().notRequired(),
+        pais: yup.string().notRequired(),
+        direccion: yup.string().notRequired(),
+        fechaNacimiento: yup.string().notRequired(),
+        correo: yup.string().notRequired(),
+        ocupacion: yup.string().notRequired(),
+        puestoTrabajo: yup.string().notRequired(),
+        idPlan: yup.string().notRequired(),
+        fechaInicio: yup.string().notRequired(),
     });
 
     // Paso 3: Resumen
@@ -262,6 +298,29 @@ export const getStepValidationSchemas = () => {
                 fecha.setHours(0, 0, 0, 0);
                 return fecha >= hoy;
             }),
+
+        // Incluir todos los demás campos como no requeridos para este paso
+        cedula: yup.string().notRequired(),
+        celular: yup.string().notRequired(),
+        nombre: yup.string().notRequired(),
+        apellido: yup.string().notRequired(),
+        ciudad: yup.string().notRequired(),
+        pais: yup.string().notRequired(),
+        direccion: yup.string().notRequired(),
+        fechaNacimiento: yup.string().notRequired(),
+        correo: yup.string().notRequired(),
+        ocupacion: yup.string().notRequired(),
+        puestoTrabajo: yup.string().notRequired(),
+        idPlan: yup.string().notRequired(),
+        peso: yup.string().notRequired(),
+        altura: yup.string().notRequired(),
+        brazos: yup.string().notRequired(),
+        pantorrillas: yup.string().notRequired(),
+        gluteo: yup.string().notRequired(),
+        muslos: yup.string().notRequired(),
+        pecho: yup.string().notRequired(),
+        cintura: yup.string().notRequired(),
+        cuello: yup.string().notRequired(),
     });
 
     return {

@@ -29,17 +29,24 @@
 	// Calcular error y mensaje de error correctamente para Felte
 	$: fieldErrors = errors[name] || [];
 	$: fieldTouched = touched[name] || false;
-	$: hasError = fieldTouched && Array.isArray(fieldErrors) && fieldErrors.length > 0;
-	$: errorMessage = hasError ? fieldErrors[0] : '';
 
-	// Para debug - remover en producción
-	$: console.log(`Field ${name}:`, {
-		value,
-		errors: fieldErrors,
-		touched: fieldTouched,
-		hasError,
-		errorMessage
-	});
+	// Manejar tanto arrays como strings para los errores
+	$: hasError =
+		fieldTouched &&
+		((Array.isArray(fieldErrors) && fieldErrors.length > 0) ||
+			(typeof fieldErrors === 'string' && fieldErrors.length > 0));
+
+	$: errorMessage = hasError
+		? Array.isArray(fieldErrors)
+			? fieldErrors[0]
+			: String(fieldErrors)
+		: '';
+
+	// Función para manejar el binding bidireccional
+	function handleInput(event: Event) {
+		const target = event.target as HTMLInputElement | HTMLSelectElement;
+		value = target.value;
+	}
 </script>
 
 {#if type === 'select'}
@@ -52,8 +59,8 @@
 		{helperText}
 		{size}
 		{disabled}
-		bind:value
-		on:change
+		{value}
+		on:change={handleInput}
 		on:blur
 	/>
 {:else if type === 'number'}
@@ -71,8 +78,8 @@
 		{max}
 		{size}
 		{disabled}
-		bind:value
-		on:input
+		{value}
+		on:input={handleInput}
 		on:change
 		on:keydown
 		on:focus
@@ -90,9 +97,9 @@
 		{disabled}
 		{minDate}
 		{maxDate}
-		bind:value
-		on:input
-		on:change
+		{value}
+		on:input={handleInput}
+		on:change={handleInput}
 		on:focus
 		on:blur
 	/>
@@ -110,8 +117,8 @@
 		{unit}
 		{size}
 		{disabled}
-		bind:value
-		on:input
+		{value}
+		on:input={handleInput}
 		on:change
 		on:keydown
 		on:focus
