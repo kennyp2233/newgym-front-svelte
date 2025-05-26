@@ -2,7 +2,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createForm } from 'felte';
-	import { validator } from '@felte/validator-yup';
+	import { validator } from '@felte/validator-zod';
 	import { reporter } from '@felte/reporter-svelte';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
 	import StepProgress from '$lib/components/modals/StepProgress.svelte';
@@ -13,13 +13,14 @@
 	import {
 		defaultClienteFormValues,
 		getStepValidationSchemas,
+		createMedidasSchemaWithOccupation,
 		type ClienteFormData
 	} from '../../forms/validation';
 	import { planService, type Plan } from '../../../planes/api';
 	import { clienteService, TipoOcupacion, type RegistroCompletoDTO } from '../../api';
 	import { toasts } from '$lib/stores/toastStore';
 	import { get } from 'svelte/store';
-	import type { ValidationError } from 'yup';
+	import type { ZodError } from 'zod';
 
 	export let isOpen = false;
 	export let onClose = () => {};
@@ -30,7 +31,7 @@
 	let currentStep = 0;
 	let planes: Plan[] = [];
 	let isSubmitting = false;
-	let skipMedidas = false; // Nueva variable para omitir medidas
+	let skipMedidas = false;
 
 	const steps = [
 		{
@@ -40,7 +41,7 @@
 		{
 			title: isEditing ? 'Actualizar medidas del cliente' : 'Medidas del cliente',
 			component: MedidasStep,
-			optional: true // Marcar como opcional
+			optional: true
 		},
 		{
 			title: isEditing ? 'Actualizar detalles de la membresía' : 'Detalles de la membresía',
@@ -55,30 +56,41 @@
 
 	const { informacionPersonalSchema, medidasSchema, resumenSchema } = getStepValidationSchemas();
 
-	// Función para obtener el schema actual basado en el paso y si se omiten medidas
-	function getCurrentSchema() {
-		if (currentStep === 0) return informacionPersonalSchema;
-		if (currentStep === 1) {
-			// Si se omiten medidas, usar un schema más permisivo
-			return skipMedidas ? informacionPersonalSchema : medidasSchema;
-		}
-		if (currentStep === 2) return resumenSchema;
-		return informacionPersonalSchema;
-	}
-
-	// Crear formulario con valores iniciales
+	// Variables para el formulario
 	let form: any;
 	let data: any;
 	let errors: any;
 	let touched: any;
 	let isValid: any;
 	let setData: any;
+	let validate: any;
 
-	// Función para reinicializar el formulario con nuevo schema
+	// Función para obtener el schema actual basado en el paso
+	function getCurrentSchema() {
+		if (currentStep === 0) return informacionPersonalSchema;
+		if (currentStep === 1) {
+			// Para medidas, usar schema condicional basado en ocupación
+			const currentData = (get(data) as Partial<ClienteFormData>) || {};
+			const ocupacion = currentData.ocupacion || TipoOcupacion.ESTUDIANTE;
+			// .partial() must be called on the base object, not on a ZodEffects wrapper
+			// If informacionPersonalSchema is wrapped in effects, unwrap to base schema before .partial()
+			const baseInfoSchema =
+				(informacionPersonalSchema as any)._def?.schema ?? informacionPersonalSchema;
+			return skipMedidas ? baseInfoSchema.partial() : createMedidasSchemaWithOccupation(ocupacion);
+		}
+		if (currentStep === 2) return resumenSchema;
+		return informacionPersonalSchema;
+	}
+
+	// Función para inicializar el formulario
 	function initializeForm() {
-		const formInstance = createForm<any>({
-			initialValues: clienteToEdit || defaultClienteFormValues,
-			extend: [validator({ schema: getCurrentSchema() as any }), reporter()],
+		const initialValues = clienteToEdit
+			? { ...defaultClienteFormValues, ...clienteToEdit }
+			: defaultClienteFormValues;
+
+		const formInstance = createForm<ClienteFormData>({
+			initialValues,
+			extend: [validator({ schema: getCurrentSchema() }), reporter()],
 			onSubmit: async (values) => {
 				if (isLastStep) {
 					await handleFinalSubmit(values);
@@ -97,6 +109,7 @@
 		touched = formInstance.touched;
 		isValid = formInstance.isValid;
 		setData = formInstance.setData;
+		validate = formInstance.validate;
 	}
 
 	// Inicializar formulario al montar
@@ -111,15 +124,7 @@
 		}
 	});
 
-	// Reinicializar cuando cambie el paso o skipMedidas
-	$: if (form && (currentStep >= 0 || skipMedidas !== undefined)) {
-		// Reinicializar con nuevo schema
-		setTimeout(() => {
-			initializeForm();
-		}, 0);
-	}
-
-	// Actualizar datos cuando cambie clienteToEdit
+	// Reactividad para cambios importantes
 	$: if (clienteToEdit && isOpen && setData) {
 		const formData = { ...defaultClienteFormValues, ...clienteToEdit };
 		setData(formData);
@@ -127,32 +132,40 @@
 		skipMedidas = false;
 	}
 
-	async function validateCurrentStep(): Promise<boolean> {
-		if (!errors || !touched) return false;
+	// Reinicializar cuando cambie el esquema de validación
+	$: if (form && (currentStep >= 0 || skipMedidas !== undefined)) {
+		// Recrear formulario con nuevo schema
+		setTimeout(() => {
+			const currentData = get(data);
+			initializeForm();
+			if (currentData && setData) {
+				setData(currentData);
+			}
+		}, 0);
+	}
 
-		// Limpiar errores previos
-		errors.set({});
-		touched.set({});
+	async function validateCurrentStep(): Promise<boolean> {
+		if (!validate || !data) return false;
 
 		try {
+			const currentData = get(data);
 			const currentSchema = getCurrentSchema();
-			await currentSchema.validate(get(data), { abortEarly: false });
+			await currentSchema.parseAsync(currentData);
 			return true;
-		} catch (err: any) {
-			if (err.inner && Array.isArray(err.inner)) {
-				const errObj: Record<string, string[]> = {};
+		} catch (err) {
+			if (err instanceof Error && 'issues' in err) {
+				const zodError = err as ZodError;
+				const errorsObj: Record<string, string[]> = {};
 				const touchedObj: Record<string, boolean> = {};
 
-				(err.inner as ValidationError[]).forEach((e) => {
-					if (e.path) {
-						// Felte espera arrays de errores
-						if (!errObj[e.path]) errObj[e.path] = [];
-						errObj[e.path].push(e.message);
-						touchedObj[e.path] = true;
-					}
+				zodError.issues.forEach((issue) => {
+					const path = issue.path.join('.');
+					if (!errorsObj[path]) errorsObj[path] = [];
+					errorsObj[path].push(issue.message);
+					touchedObj[path] = true;
 				});
 
-				errors.set(errObj);
+				errors.set(errorsObj);
 				touched.set(touchedObj);
 			}
 			return false;
@@ -181,14 +194,13 @@
 		}
 	}
 
-	// Nueva función para omitir medidas
 	function handleSkipMedidas() {
 		skipMedidas = true;
 		// Limpiar datos de medidas excepto peso y altura básicos
 		if (data && setData) {
 			const currentData = get(data);
 			setData({
-				...(typeof currentData === 'object' && currentData !== null ? currentData : {}),
+				...((currentData ?? {}) as object),
 				brazos: '',
 				pantorrillas: '',
 				gluteo: '',
@@ -268,8 +280,8 @@
 		let categoriaPeso = 'No calculado';
 
 		if (formData.peso && formData.altura) {
-			const alturaNumero = parseFloat(formData.altura);
-			const pesoNumero = parseFloat(formData.peso);
+			const alturaNumero = parseFloat(String(formData.altura));
+			const pesoNumero = parseFloat(String(formData.peso));
 			const alturaMetros = alturaNumero > 3 ? alturaNumero / 100 : alturaNumero;
 			imc = pesoNumero / (alturaMetros * alturaMetros);
 
@@ -282,18 +294,20 @@
 		const esNino = formData.ocupacion === TipoOcupacion.NINO;
 
 		const medidasDTO = {
-			...(formData.peso && { peso: parseFloat(formData.peso) }),
-			...(formData.altura && { altura: parseFloat(formData.altura) }),
+			...(formData.peso && { peso: parseFloat(String(formData.peso)) }),
+			...(formData.altura && { altura: parseFloat(String(formData.altura)) }),
 			...(skipMedidas || esNino
 				? {}
 				: {
-						...(formData.brazos && { brazos: parseFloat(formData.brazos) }),
-						...(formData.pantorrillas && { pantorrillas: parseFloat(formData.pantorrillas) }),
-						...(formData.gluteo && { gluteo: parseFloat(formData.gluteo) }),
-						...(formData.muslos && { muslos: parseFloat(formData.muslos) }),
-						...(formData.pecho && { pecho: parseFloat(formData.pecho) }),
-						...(formData.cintura && { cintura: parseFloat(formData.cintura) }),
-						...(formData.cuello && { cuello: parseFloat(formData.cuello) })
+						...(formData.brazos && { brazos: parseFloat(String(formData.brazos)) }),
+						...(formData.pantorrillas && {
+							pantorrillas: parseFloat(String(formData.pantorrillas))
+						}),
+						...(formData.gluteo && { gluteo: parseFloat(String(formData.gluteo)) }),
+						...(formData.muslos && { muslos: parseFloat(String(formData.muslos)) }),
+						...(formData.pecho && { pecho: parseFloat(String(formData.pecho)) }),
+						...(formData.cintura && { cintura: parseFloat(String(formData.cintura)) }),
+						...(formData.cuello && { cuello: parseFloat(String(formData.cuello)) })
 					}),
 			...(imc > 0 && { imc: parseFloat(imc.toFixed(2)), categoriaPeso })
 		};
@@ -347,7 +361,7 @@
 		if (!data) return;
 
 		// Actualizar el valor en el store de felte
-		data.update((current: any) => {
+		data.update((current: ClienteFormData) => {
 			const newData = { ...current, [field]: value };
 
 			// Lógica para selección automática de planes
