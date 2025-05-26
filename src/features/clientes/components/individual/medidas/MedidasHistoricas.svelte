@@ -240,7 +240,7 @@
 		color: #1e40af;
 		transition: background-color 0.15s ease-in-out;
 	}
-	
+
 	:global(.btn-edit:hover) {
 		background-color: #bfdbfe;
 	}

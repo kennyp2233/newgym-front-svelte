@@ -311,10 +311,10 @@
 		<!-- Panel con tabs -->
 		<Panel {tabs} defaultActiveTab="medidas">
 			<svelte:fragment slot="default">
-				{#if tabs.find((tab) => tab.key === 'medidas') && cliente}
+				{#if tabs.find((tab) => tab.key === 'medidas') && cliente && clienteId}
 					<MedidasHistoricas {clienteId} {cliente} onUpdate={reloadClienteData} />
 				{/if}
-				{#if tabs.find((tab) => tab.key === 'pagos') && cliente}
+				{#if tabs.find((tab) => tab.key === 'pagos') && cliente && clienteId}
 					<HistorialPagos {clienteId} {cliente} onUpdate={reloadClienteData} />
 				{/if}
 			</svelte:fragment>
