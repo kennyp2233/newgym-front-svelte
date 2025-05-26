@@ -40,9 +40,8 @@
 					cintura: yup.number().required('La medida de cintura es requerida')
 				})
 	});
-
-	// Configuración del formulario con valores iniciales de la medida
-	const { form, errors, touched, handleSubmit } = createForm({
+	// Configuración del formulario con valores iniciales de la medida (sin validationSchema para manejar validación manual)
+	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			peso: medida.peso?.toString() || '',
 			altura: medida.altura?.toString() || '',
@@ -54,40 +53,89 @@
 			cintura: medida.cintura?.toString() || '',
 			cuello: medida.cuello?.toString() || ''
 		},
-		validationSchema,
-		onSubmit: async (values) => {
-			isSubmitting = true;
-			try {
-				const medidaData = {
-					peso: parseFloat(values.peso),
-					altura: parseFloat(values.altura),
-					imc: parseFloat(imc),
-					categoriaPeso,
-					...(esNino
-						? {}
-						: {
-								brazos: parseFloat(values.brazos),
-								pantorrillas: parseFloat(values.pantorrillas),
-								gluteo: parseFloat(values.gluteo),
-								muslos: parseFloat(values.muslos),
-								pecho: parseFloat(values.pecho),
-								cintura: parseFloat(values.cintura),
-								cuello: values.cuello ? parseFloat(values.cuello) : undefined
-							})
-				};
-
-				await medidaService.updateMedida(medida.idMedida, medidaData);
-				toasts.showToast('Medida actualizada correctamente', 'success');
-				isEditing = false;
-				onSuccess();
-			} catch (error) {
-				console.error('Error al actualizar medida:', error);
-				toasts.showToast('Error al actualizar medida', 'error');
-			} finally {
-				isSubmitting = false;
-			}
-		}
+		onSubmit: () => {} // Empty function since we handle submission manually
 	});
+					
+	const updateFieldWrapper = (field: string, value: any) => {
+		updateField(field as keyof typeof $form, value);
+		// Force reactivity by updating the form store directly
+		form.update((current) => ({
+			...current,
+			[field]: value
+		}));
+	};
+	// Función de validación manual siguiendo el patrón del formulario principal
+	async function validateForm(): Promise<boolean> {
+		try {
+			await validationSchema.validate($form, { abortEarly: false });
+			// Si la validación pasa, limpiar errores
+			const emptyErrors: Record<string, string> = {};
+			Object.keys($form).forEach(key => emptyErrors[key] = '');
+			errors.set(emptyErrors);
+			return true;
+		} catch (yupError: any) {
+			const newErrors: Record<string, string> = {};
+			if (yupError.inner && yupError.inner.length > 0) {
+				yupError.inner.forEach((err: any) => {
+					if (err.path) {
+						newErrors[err.path] = err.message;
+					}
+				});
+			} else if (yupError.path) {
+				newErrors[yupError.path] = yupError.message;
+			}
+
+			// Actualizar errores
+			errors.set(newErrors);
+
+			// Marcar campos como touched
+			const newTouched: Record<string, boolean> = {};
+			Object.keys($form).forEach((key) => (newTouched[key] = true));
+			touched.set(newTouched as any);
+			return false;
+		}
+	}
+
+	// Función de submit manual
+	async function handleSubmitForm() {
+		const isValid = await validateForm();
+		
+		if (!isValid) {
+			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
+			return;
+		}
+
+		isSubmitting = true;
+		try {
+			const medidaData = {
+				peso: parseFloat($form.peso),
+				altura: parseFloat($form.altura),
+				imc: parseFloat(imc),
+				categoriaPeso,
+				...(esNino
+					? {}
+					: {
+							brazos: parseFloat($form.brazos),
+							pantorrillas: parseFloat($form.pantorrillas),
+							gluteo: parseFloat($form.gluteo),
+							muslos: parseFloat($form.muslos),
+							pecho: parseFloat($form.pecho),
+							cintura: parseFloat($form.cintura),
+							cuello: $form.cuello ? parseFloat($form.cuello) : undefined
+						})
+			};
+
+			await medidaService.updateMedida(medida.idMedida, medidaData);
+			toasts.showToast('Medida actualizada correctamente', 'success');
+			isEditing = false;
+			onSuccess();
+		} catch (error) {
+			console.error('Error al actualizar medida:', error);
+			toasts.showToast('Error al actualizar medida', 'error');
+		} finally {
+			isSubmitting = false;
+		}
+	}
 
 	// Función para calcular IMC
 	function calcularIMC(peso: number, altura: number) {
@@ -130,22 +178,19 @@
 			minute: '2-digit'
 		});
 	}
-
 	function toggleEdit() {
 		isEditing = !isEditing;
 		if (!isEditing) {
-			// Resetear valores del formulario si se cancela la edición
-			form.set({
-				peso: medida.peso?.toString() || '',
-				altura: medida.altura?.toString() || '',
-				brazos: medida.brazos?.toString() || '',
-				pantorrillas: medida.pantorrillas?.toString() || '',
-				gluteo: medida.gluteo?.toString() || '',
-				muslos: medida.muslos?.toString() || '',
-				pecho: medida.pecho?.toString() || '',
-				cintura: medida.cintura?.toString() || '',
-				cuello: medida.cuello?.toString() || ''
-			});
+			// Resetear valores del formulario si se cancela la edición usando updateField
+			updateFieldWrapper('peso', medida.peso?.toString() || '');
+			updateFieldWrapper('altura', medida.altura?.toString() || '');
+			updateFieldWrapper('brazos', medida.brazos?.toString() || '');
+			updateFieldWrapper('pantorrillas', medida.pantorrillas?.toString() || '');
+			updateFieldWrapper('gluteo', medida.gluteo?.toString() || '');
+			updateFieldWrapper('muslos', medida.muslos?.toString() || '');
+			updateFieldWrapper('pecho', medida.pecho?.toString() || '');
+			updateFieldWrapper('cintura', medida.cintura?.toString() || '');
+			updateFieldWrapper('cuello', medida.cuello?.toString() || '');
 		}
 	}
 </script>
@@ -170,7 +215,7 @@
 
 	{#if isEditing}
 		<!-- MODO EDICIÓN -->
-		<form on:submit={handleSubmit}>
+		<form on:submit|preventDefault={handleSubmitForm}>
 			<div class="space-y-4">
 				<p class="mb-4 text-sm text-gray-600">
 					Editar medidas de <strong>{cliente.nombre} {cliente.apellido}</strong>
@@ -378,7 +423,7 @@
 	<svelte:fragment slot="footer">
 		{#if isEditing}
 			<Button variant="outline" on:click={toggleEdit} type="button">Cancelar</Button>
-			<Button variant="primary" on:click={handleSubmit} type="button" isLoading={isSubmitting}>
+			<Button variant="primary" on:click={handleSubmitForm} type="button" isLoading={isSubmitting}>
 				Guardar Cambios
 			</Button>
 		{:else}

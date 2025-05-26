@@ -30,39 +30,87 @@
 			.string()
 			.max(150, 'Las observaciones no pueden exceder 150 caracteres')
 			.nullable()
-	});
-
-	// Configuración del formulario con valores iniciales del pago
-	const { form, errors, touched, handleSubmit } = createForm({
+	});	// Configuración del formulario con valores iniciales del pago (sin validationSchema para manejar validación manual)
+	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			monto: pago.monto.toString(),
 			metodoPago: pago.metodoPago || '',
 			referencia: pago.referencia || '',
 			observaciones: pago.observaciones || ''
 		},
-		validationSchema,
-		onSubmit: async (values) => {
-			isSubmitting = true;
-			try {
-				const pagoData = {
-					monto: parseFloat(values.monto),
-					metodoPago: values.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta' | undefined,
-					referencia: values.referencia || undefined,
-					observaciones: values.observaciones || undefined
-				};
-
-				await pagoService.updatePago(pago.idPago!, pagoData);
-				toasts.showToast('Pago actualizado correctamente', 'success');
-				isEditing = false;
-				onSuccess();
-			} catch (error) {
-				console.error('Error al actualizar pago:', error);
-				toasts.showToast('Error al actualizar pago', 'error');
-			} finally {
-				isSubmitting = false;
-			}
-		}
+		onSubmit: () => {} // Empty function since we handle submission manually
 	});
+
+	// Wrapper para updateField siguiendo el patrón del formulario principal
+	const updateFieldWrapper = (field: string, value: any) => {
+		updateField(field as keyof typeof $form, value);
+		// Force reactivity by updating the form store directly
+		form.update((current) => ({
+			...current,
+			[field]: value
+		}));
+	};
+	// Función de validación manual siguiendo el patrón del formulario principal
+	async function validateForm(): Promise<boolean> {
+		try {
+			await validationSchema.validate($form, { abortEarly: false });
+			// Si la validación pasa, limpiar errores
+			const emptyErrors: Record<string, string> = {};
+			Object.keys($form).forEach(key => emptyErrors[key] = '');
+			errors.set(emptyErrors);
+			return true;
+		} catch (yupError: any) {
+			const newErrors: Record<string, string> = {};
+			if (yupError.inner && yupError.inner.length > 0) {
+				yupError.inner.forEach((err: any) => {
+					if (err.path) {
+						newErrors[err.path] = err.message;
+					}
+				});
+			} else if (yupError.path) {
+				newErrors[yupError.path] = yupError.message;
+			}
+
+			// Actualizar errores
+			errors.set(newErrors);
+
+			// Marcar campos como touched
+			const newTouched: Record<string, boolean> = {};
+			Object.keys($form).forEach((key) => (newTouched[key] = true));
+			touched.set(newTouched as any);
+			return false;
+		}
+	}
+
+	// Función de submit manual
+	async function handleSubmitForm() {
+		const isValid = await validateForm();
+		
+		if (!isValid) {
+			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
+			return;
+		}
+
+		isSubmitting = true;
+		try {
+			const pagoData = {
+				monto: parseFloat($form.monto),
+				metodoPago: $form.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta' | undefined,
+				referencia: $form.referencia || undefined,
+				observaciones: $form.observaciones || undefined
+			};
+
+			await pagoService.updatePago(pago.idPago!, pagoData);
+			toasts.showToast('Pago actualizado correctamente', 'success');
+			isEditing = false;
+			onSuccess();
+		} catch (error) {
+			console.error('Error al actualizar pago:', error);
+			toasts.showToast('Error al actualizar pago', 'error');
+		} finally {
+			isSubmitting = false;
+		}
+	}
 
 	// Formatear fecha
 	function formatDate(dateString: string): string {
@@ -88,17 +136,14 @@
 				return 'bg-gray-100 text-gray-800';
 		}
 	}
-
 	function toggleEdit() {
 		isEditing = !isEditing;
 		if (!isEditing) {
-			// Resetear valores del formulario si se cancela la edición
-			form.set({
-				monto: pago.monto.toString(),
-				metodoPago: pago.metodoPago || '',
-				referencia: pago.referencia || '',
-				observaciones: pago.observaciones || ''
-			});
+			// Resetear valores del formulario usando el wrapper
+			updateFieldWrapper('monto', pago.monto.toString());
+			updateFieldWrapper('metodoPago', pago.metodoPago || '');
+			updateFieldWrapper('referencia', pago.referencia || '');
+			updateFieldWrapper('observaciones', pago.observaciones || '');
 		}
 	}
 
@@ -142,7 +187,7 @@
 
 	{#if isEditing}
 		<!-- MODO EDICIÓN -->
-		<form on:submit={handleSubmit}>
+		<form on:submit|preventDefault={handleSubmitForm}>
 			<div class="space-y-4">
 				<p class="mb-4 text-sm text-gray-600">
 					Editar pago de <strong>{cliente.nombre} {cliente.apellido}</strong>
@@ -311,7 +356,7 @@
 				<Icon name="trash" size={16} className="mr-2" />
 				Eliminar
 			</Button>
-			<Button variant="primary" on:click={handleSubmit} type="button" isLoading={isSubmitting}>
+			<Button variant="primary" on:click={handleSubmitForm} type="button" isLoading={isSubmitting}>
 				Guardar Cambios
 			</Button>
 		{:else}

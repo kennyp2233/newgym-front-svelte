@@ -38,9 +38,8 @@
 					cintura: yup.number().required('La medida de cintura es requerida')
 				})
 	});
-
-	// Configuración del formulario
-	const { form, errors, touched, handleSubmit } = createForm({
+	// Configuración del formulario (sin validationSchema para manejar validación manual)
+	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			peso: '',
 			altura: '',
@@ -52,42 +51,91 @@
 			cintura: '',
 			cuello: ''
 		},
-		validationSchema,
-		onSubmit: async (values) => {
-			isSubmitting = true;
-			try {
-				// Crear objeto de medida con o sin medidas adicionales según la ocupación
-				const medidaData = {
-					idCliente: cliente.idCliente,
-					peso: parseFloat(values.peso),
-					altura: parseFloat(values.altura),
-					imc: parseFloat(imc),
-					categoriaPeso,
-					// Si es niño, solo enviamos peso y altura
-					...(esNino
-						? {}
-						: {
-								brazos: parseFloat(values.brazos),
-								pantorrillas: parseFloat(values.pantorrillas),
-								gluteo: parseFloat(values.gluteo),
-								muslos: parseFloat(values.muslos),
-								pecho: parseFloat(values.pecho),
-								cintura: parseFloat(values.cintura),
-								cuello: values.cuello ? parseFloat(values.cuello) : undefined
-							})
-				};
-
-				await medidaService.createMedida(medidaData);
-				toasts.showToast('Medida registrada correctamente', 'success');
-				onSuccess();
-			} catch (error) {
-				console.error('Error al registrar medida:', error);
-				toasts.showToast('Error al registrar medida', 'error');
-			} finally {
-				isSubmitting = false;
-			}
-		}
+		onSubmit: () => {} // Empty function since we handle submission manually
 	});
+	// Wrapper para updateField siguiendo el patrón del formulario principal
+	const updateFieldWrapper = (field: string, value: any) => {
+		updateField(field as keyof typeof $form, value);
+		// Force reactivity by updating the form store directly
+		form.update((current) => ({
+			...current,
+			[field]: value
+		}));
+	};
+	// Función de validación manual siguiendo el patrón del formulario principal
+	async function validateForm(): Promise<boolean> {
+		try {
+			await validationSchema.validate($form, { abortEarly: false });
+			// Si la validación pasa, limpiar errores
+			const emptyErrors: Record<string, string> = {};
+			Object.keys($form).forEach(key => emptyErrors[key] = '');
+			errors.set(emptyErrors);
+			return true;
+		} catch (yupError: any) {
+			const newErrors: Record<string, string> = {};
+			if (yupError.inner && yupError.inner.length > 0) {
+				yupError.inner.forEach((err: any) => {
+					if (err.path) {
+						newErrors[err.path] = err.message;
+					}
+				});
+			} else if (yupError.path) {
+				newErrors[yupError.path] = yupError.message;
+			}
+
+			// Actualizar errores
+			errors.set(newErrors);
+
+			// Marcar campos como touched
+			const newTouched: Record<string, boolean> = {};
+			Object.keys($form).forEach((key) => (newTouched[key] = true));
+			touched.set(newTouched as any);
+			return false;
+		}
+	}
+
+	// Función de submit manual
+	async function handleSubmitForm() {
+		const isValid = await validateForm();
+		
+		if (!isValid) {
+			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
+			return;
+		}
+
+		isSubmitting = true;
+		try {
+			// Crear objeto de medida con o sin medidas adicionales según la ocupación
+			const medidaData = {
+				idCliente: cliente.idCliente,
+				peso: parseFloat($form.peso),
+				altura: parseFloat($form.altura),
+				imc: parseFloat(imc),
+				categoriaPeso,
+				// Si es niño, solo enviamos peso y altura
+				...(esNino
+					? {}
+					: {
+							brazos: parseFloat($form.brazos),
+							pantorrillas: parseFloat($form.pantorrillas),
+							gluteo: parseFloat($form.gluteo),
+							muslos: parseFloat($form.muslos),
+							pecho: parseFloat($form.pecho),
+							cintura: parseFloat($form.cintura),
+							cuello: $form.cuello ? parseFloat($form.cuello) : undefined
+						})
+			};
+
+			await medidaService.createMedida(medidaData);
+			toasts.showToast('Medida registrada correctamente', 'success');
+			onSuccess();
+		} catch (error) {
+			console.error('Error al registrar medida:', error);
+			toasts.showToast('Error al registrar medida', 'error');
+		} finally {
+			isSubmitting = false;
+		}
+	}
 
 	// Función para calcular IMC
 	function calcularIMC(peso: number, altura: number) {
@@ -153,7 +201,7 @@
 		<h3 class="text-lg font-semibold">Nueva Medida</h3>
 	</svelte:fragment>
 
-	<form on:submit={handleSubmit}>
+	<form on:submit|preventDefault={handleSubmitForm}>
 		<div class="space-y-4">
 			<p class="mb-4 text-sm text-gray-600">
 				Registra las nuevas medidas para <strong>{cliente.nombre} {cliente.apellido}</strong>
@@ -319,10 +367,9 @@
 			</div>
 		</div>
 	</form>
-
 	<svelte:fragment slot="footer">
 		<Button variant="outline" on:click={onClose} type="button">Cancelar</Button>
-		<Button variant="primary" on:click={handleSubmit} type="button" isLoading={isSubmitting}>
+		<Button variant="primary" on:click={handleSubmitForm} type="button" isLoading={isSubmitting}>
 			Guardar medida
 		</Button>
 	</svelte:fragment>

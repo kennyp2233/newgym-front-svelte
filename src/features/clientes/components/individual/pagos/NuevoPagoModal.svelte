@@ -23,7 +23,7 @@
 	let planSeleccionado: Plan | null = null;
 	let tieneDeudaActiva = false;
 	let isSubmitting = false;
-	let puedeRenovar = { puede: true, mensaje: '', diasRestantes: 0 as number | undefined } as { puede: boolean; mensaje: string; diasRestantes?: number | undefined };
+	let puedeRenovar = { puede: true, mensaje: '', diasRestantes: 0 };
 
 	// Esquema de validación actualizado según documentación
 	const validationSchema = yup.object({
@@ -57,8 +57,8 @@
 			.nullable()
 	});
 
-	// Configuración del formulario
-	const { form, errors, touched, handleSubmit } = createForm({
+	// Configuración del formulario (sin validationSchema para manejar validación manual)
+	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			idPlan: planActualId?.toString() || '',
 			metodoPago: '',
@@ -67,34 +67,84 @@
 			referencia: '',
 			observaciones: ''
 		},
-		validationSchema,
-		onSubmit: async (values) => {
-			// Verificar si tiene deuda activa
-			if (tieneDeudaActiva) {
-				toasts.showToast(
-					'No se puede registrar un nuevo pago mientras haya deuda pendiente. Complete el pago anterior primero.',
-					'error'
-				);
-				return;
+		onSubmit: () => {} // Empty function since we handle submission manually
+	});
+	
+	// Wrapper para updateField siguiendo el patrón del formulario principal
+	const updateFieldWrapper = (field: string, value: any) => {
+		updateField(field as keyof typeof $form, value);
+		// Force reactivity by updating the form store directly
+		form.update((current) => ({
+			...current,
+			[field]: value
+		}));
+	};
+	
+	// Función de validación manual siguiendo el patrón del formulario principal
+	async function validateForm(): Promise<boolean> {
+		try {
+			await validationSchema.validate($form, { abortEarly: false });
+			// Si la validación pasa, limpiar errores
+			const emptyErrors: Record<string, string> = {};
+			Object.keys($form).forEach(key => emptyErrors[key] = '');
+			errors.set(emptyErrors);
+			return true;
+		} catch (yupError: any) {
+			const newErrors: Record<string, string> = {};
+			if (yupError.inner && yupError.inner.length > 0) {
+				yupError.inner.forEach((err: any) => {
+					if (err.path) {
+						newErrors[err.path] = err.message;
+					}
+				});
+			} else if (yupError.path) {
+				newErrors[yupError.path] = yupError.message;
 			}
 
-			// Verificar si puede renovar (solo para renovaciones)
-			if (isRenovacion && !puedeRenovar.puede) {
-				toasts.showToast(puedeRenovar.mensaje, 'error');
-				return;
-			}
+			// Actualizar errores
+			errors.set(newErrors);
 
-			isSubmitting = true;
-			try {
-				// Preparar datos según documentación API
-				const renovacionData: RenovacionPlanDTO = {
-					idCliente: cliente.idCliente,
-					idPlan: parseInt(values.idPlan),
-					metodoPago: (values.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta') || undefined,
-					monto: values.monto ? parseFloat(values.monto.toString()) : undefined,
-					fechaInicio: values.fechaInicio || undefined,
-					referencia: values.referencia || undefined,
-					observaciones: values.observaciones || undefined
+			// Marcar campos como touched
+			const newTouched: Record<string, boolean> = {};
+			Object.keys($form).forEach((key) => (newTouched[key] = true));
+			touched.set(newTouched as any);
+			return false;
+		}
+	}
+	
+	// Función de submit manual
+	async function handleSubmitForm() {
+		const isValid = await validateForm();
+		
+		if (!isValid) {
+			return;
+		}
+		
+		// Verificar si tiene deuda activa
+		if (tieneDeudaActiva) {
+			toasts.showToast(
+				'No se puede registrar un nuevo pago mientras haya deuda pendiente. Complete el pago anterior primero.',
+				'error'
+			);
+			return;
+		}
+
+		// Verificar si puede renovar (solo para renovaciones)
+		if (isRenovacion && !puedeRenovar.puede) {
+			toasts.showToast(puedeRenovar.mensaje, 'error');
+			return;
+		}
+
+		isSubmitting = true;
+		try {
+			// Preparar datos según documentación API
+			const renovacionData: RenovacionPlanDTO = {
+				idCliente: cliente.idCliente,
+				idPlan: parseInt($form.idPlan),
+				metodoPago: ($form.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta') || undefined,					monto: $form.monto ? parseFloat($form.monto.toString()) : undefined,
+					fechaInicio: $form.fechaInicio || undefined,
+					referencia: $form.referencia || undefined,
+					observaciones: $form.observaciones || undefined
 				};
 
 				const response = await pagoService.renovarPlan(renovacionData);
@@ -164,11 +214,11 @@
 
 		return añoInicial + (añoActual - añoInicial) + 1;
 	}
-
 	// Actualizar plan seleccionado cuando cambia el idPlan
 	function handlePlanChange(idPlan: string) {
 		const plan = planes.find((p) => p.idPlan === parseInt(idPlan));
 		planSeleccionado = plan || null;
+		updateFieldWrapper('idPlan', idPlan);
 	}
 
 	// Calcular fecha de fin
@@ -188,10 +238,10 @@
 	$: añoRenovacion = calcularAñoRenovacion();
 	$: caracteresRestantes = 150 - ($form.observaciones?.length || 0);
 	$: precioTotal = getPrecioTotal();
-
 	// Reactivo: actualizar plan seleccionado cuando cambie idPlan en el form
 	$: if ($form.idPlan) {
-		handlePlanChange($form.idPlan);
+		const plan = planes.find((p) => p.idPlan === parseInt($form.idPlan));
+		planSeleccionado = plan || null;
 	}
 </script>
 
@@ -225,7 +275,7 @@
 			</div>
 		</div>
 	{:else}
-		<form on:submit={handleSubmit}>
+		<form on:submit|preventDefault={handleSubmitForm}>
 			<div class="space-y-4">
 				<p class="mb-4 text-sm text-gray-600">
 					{isRenovacion ? 'Renovar membresía para' : 'Registrar nuevo pago para'}
@@ -264,8 +314,8 @@
 									plan.duracionMeses === 1 ? 'mes' : 'meses'
 								}) - $${plan.precio.toFixed(2)}`
 							}))
-						]}
-						bind:value={$form.idPlan}
+						]}						value={$form.idPlan}
+						on:change={(e) => updateFieldWrapper('idPlan', e.target.value)}
 						errors={$errors}
 						touched={$touched}
 					/>
@@ -278,8 +328,8 @@
 							{ value: 'Efectivo', label: 'Efectivo' },
 							{ value: 'Transferencia', label: 'Transferencia' },
 							{ value: 'Tarjeta', label: 'Tarjeta de crédito/débito' }
-						]}
-						bind:value={$form.metodoPago}
+						]}						value={$form.metodoPago}
+						on:change={(e) => updateFieldWrapper('metodoPago', e.target.value)}
 						errors={$errors}
 						touched={$touched}
 					/>
@@ -297,8 +347,8 @@
 						unit="$"
 						min={1}
 						max={precioTotal}
-						step="0.01"
-						bind:value={$form.monto}
+						step="0.01"						value={$form.monto}
+						on:input={(e) => updateFieldWrapper('monto', e.target.value)}
 						errors={$errors}
 						touched={$touched}
 					/>
@@ -306,8 +356,8 @@
 						name="fechaInicio"
 						label="Fecha de inicio (Opcional)"
 						type="date"
-						helperText="Si no se especifica, se usará la fecha actual"
-						bind:value={$form.fechaInicio}
+						helperText="Si no se especifica, se usará la fecha actual"						value={$form.fechaInicio}
+						on:change={(e) => updateFieldWrapper('fechaInicio', e.target.value)}
 						errors={$errors}
 						touched={$touched}
 					/>
@@ -318,8 +368,8 @@
 						<FormField
 							name="referencia"
 							label="Referencia de transferencia"
-							placeholder="Ej: TRF-123456"
-							bind:value={$form.referencia}
+							placeholder="Ej: TRF-123456"							value={$form.referencia}
+							on:input={(e) => updateFieldWrapper('referencia', e.target.value)}
 							errors={$errors}
 							touched={$touched}
 						/>
@@ -329,10 +379,10 @@
 
 				<div class="w-full space-y-1.5">
 					<!-- svelte-ignore a11y_label_has_associated_control -->
-					<label class="text-md font-bold text-[var(--letter)]">Observaciones (Opcional)</label>
-					<textarea
+					<label class="text-md font-bold text-[var(--letter)]">Observaciones (Opcional)</label>					<textarea
 						name="observaciones"
-						bind:value={$form.observaciones}
+						value={$form.observaciones}
+						on:input={(e) => updateFieldWrapper('observaciones', e.target.value)}
 						class="flex min-h-[80px] w-full rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 text-base focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 						placeholder="Comentarios adicionales sobre el pago..."
 						maxlength="150"
@@ -382,13 +432,13 @@
 	{/if}
 
 	<svelte:fragment slot="footer">
-		{#if tieneDeudaActiva || (isRenovacion && !puedeRenovar.puede)}
-			<Button variant="primary" on:click={onClose}>Entendido</Button>
-		{:else}
-			<Button variant="outline" on:click={onClose} type="button">Cancelar</Button>
-			<Button variant="primary" on:click={handleSubmit} type="button" isLoading={isSubmitting}>
-				{isRenovacion ? 'Renovar Plan' : 'Registrar Pago'}
-			</Button>
-		{/if}
+	{#if tieneDeudaActiva || (isRenovacion && !puedeRenovar.puede)}
+		<Button variant="primary" on:click={onClose}>Entendido</Button>
+	{:else}
+		<Button variant="outline" on:click={onClose} type="button">Cancelar</Button>
+		<Button variant="primary" on:click={handleSubmitForm} type="button" isLoading={isSubmitting}>
+			{isRenovacion ? 'Renovar Plan' : 'Registrar Pago'}
+		</Button>
+	{/if}
 	</svelte:fragment>
 </BaseModal>

@@ -37,10 +37,8 @@
 			otherwise: (schema) => schema.notRequired()
 		}),
 		fechaNacimiento: yup.string().nullable()
-	});
-
-	// Configuración del formulario
-	const { form, errors, touched, handleSubmit } = createForm({
+	});	// Configuración del formulario (sin validationSchema para manejar validación manual)
+	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			nombre: cliente.nombre,
 			apellido: cliente.apellido,
@@ -54,36 +52,85 @@
 			puestoTrabajo: cliente.puestoTrabajo || '',
 			fechaNacimiento: cliente.fechaNacimiento || ''
 		},
-		validationSchema,
-		onSubmit: async (values) => {
-			isSubmitting = true;
-			try {
-				await clienteService.updateCliente(cliente.idCliente, {
-					nombre: values.nombre,
-					apellido: values.apellido,
-					cedula: values.cedula,
-					celular: values.celular,
-					direccion: values.direccion,
-					ciudad: values.ciudad,
-					pais: values.pais,
-					correo: values.correo,
-					ocupacion: values.ocupacion as TipoOcupacion,
-					puestoTrabajo:
-						values.ocupacion === TipoOcupacion.TRABAJO ? values.puestoTrabajo : undefined,
-					fechaNacimiento: values.fechaNacimiento || undefined
-				});
-
-				toasts.showToast('Cliente actualizado correctamente', 'success');
-				onSuccess();
-			} catch (error: any) {
-				console.error('Error al actualizar cliente:', error);
-				const errorMessage = error.response?.data?.message || 'Error al actualizar cliente';
-				toasts.showToast(errorMessage, 'error');
-			} finally {
-				isSubmitting = false;
-			}
-		}
+		onSubmit: () => {} // Empty function since we handle submission manually
 	});
+	// Wrapper para updateField siguiendo el patrón del formulario principal
+	const updateFieldWrapper = (field: string, value: any) => {
+		updateField(field as keyof typeof $form, value);
+		// Force reactivity by updating the form store directly
+		form.update((current) => ({
+			...current,
+			[field]: value
+		}));
+	};
+	// Función de validación manual siguiendo el patrón del formulario principal
+	async function validateForm(): Promise<boolean> {
+		try {
+			await validationSchema.validate($form, { abortEarly: false });
+			// Si la validación pasa, limpiar errores
+			const emptyErrors: Record<string, string> = {};
+			Object.keys($form).forEach(key => emptyErrors[key] = '');
+			errors.set(emptyErrors);
+			return true;
+		} catch (yupError: any) {
+			const newErrors: Record<string, string> = {};
+			if (yupError.inner && yupError.inner.length > 0) {
+				yupError.inner.forEach((err: any) => {
+					if (err.path) {
+						newErrors[err.path] = err.message;
+					}
+				});
+			} else if (yupError.path) {
+				newErrors[yupError.path] = yupError.message;
+			}
+
+			// Actualizar errores
+			errors.set(newErrors);
+
+			// Marcar campos como touched
+			const newTouched: Record<string, boolean> = {};
+			Object.keys($form).forEach((key) => (newTouched[key] = true));
+			touched.set(newTouched as any);
+			return false;
+		}
+	}
+
+	// Función de submit manual
+	async function handleSubmitForm() {
+		const isValid = await validateForm();
+		
+		if (!isValid) {
+			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
+			return;
+		}
+
+		isSubmitting = true;
+		try {
+			await clienteService.updateCliente(cliente.idCliente, {
+				nombre: $form.nombre,
+				apellido: $form.apellido,
+				cedula: $form.cedula,
+				celular: $form.celular,
+				direccion: $form.direccion,
+				ciudad: $form.ciudad,
+				pais: $form.pais,
+				correo: $form.correo,
+				ocupacion: $form.ocupacion as TipoOcupacion,
+				puestoTrabajo:
+					$form.ocupacion === TipoOcupacion.TRABAJO ? $form.puestoTrabajo : undefined,
+				fechaNacimiento: $form.fechaNacimiento || undefined
+			});
+
+			toasts.showToast('Cliente actualizado correctamente', 'success');
+			onSuccess();
+		} catch (error: any) {
+			console.error('Error al actualizar cliente:', error);
+			const errorMessage = error.response?.data?.message || 'Error al actualizar cliente';
+			toasts.showToast(errorMessage, 'error');
+		} finally {
+			isSubmitting = false;
+		}
+	}
 
 	// Cargar planes
 	onMount(async () => {
@@ -127,14 +174,11 @@
 	<svelte:fragment slot="header">
 		<h3 class="text-lg font-semibold">Editar Información del Cliente</h3>
 	</svelte:fragment>
-
-	<form on:submit={handleSubmit}>
+	<form on:submit|preventDefault={handleSubmitForm}>
 		<div class="space-y-4">
 			<p class="mb-4 text-sm text-gray-600">
 				Editar información personal de <strong>{cliente.nombre} {cliente.apellido}</strong>
-			</p>
-
-			<FormRow>
+			</p>			<FormRow>
 				<FormField
 					name="cedula"
 					label="Cédula"
@@ -238,11 +282,10 @@
 					]}
 					bind:value={$form.ocupacion}
 					errors={$errors}
-					touched={$touched}
-					on:change={(e) => {
+					touched={$touched}					on:change={(e) => {
 						// Limpiar puesto de trabajo si no es Trabajo
 						if (e.target && (e.target as HTMLSelectElement).value !== TipoOcupacion.TRABAJO) {
-							$form.puestoTrabajo = '';
+							updateFieldWrapper('puestoTrabajo', '');
 						}
 					}}
 				/>
@@ -289,10 +332,9 @@
 			</div>
 		</div>
 	</form>
-
 	<svelte:fragment slot="footer">
 		<Button variant="outline" on:click={onClose} type="button">Cancelar</Button>
-		<Button variant="primary" on:click={handleSubmit} type="button" isLoading={isSubmitting}>
+		<Button variant="primary" on:click={handleSubmitForm} type="button" isLoading={isSubmitting}>
 			Actualizar Cliente
 		</Button>
 	</svelte:fragment>
