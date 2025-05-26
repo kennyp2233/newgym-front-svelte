@@ -8,12 +8,9 @@
 	export let closeOnClickOutside: boolean = false;
 	export let closeOnEsc: boolean = true;
 
-	// Nuevas props
-	/** Si es true, envuelve body+footer en un <form> */
+	// Props de formulario
 	export let asForm: boolean = false;
-	/** Handler de submit */
 	export let onSubmit: (e: Event) => void = () => {};
-	/** Pasa novalidate al form si quieres desactivar validación nativa */
 	export let novalidate: boolean = false;
 
 	const sizeClasses = {
@@ -25,6 +22,7 @@
 	};
 
 	let originalOverflow = '';
+	let wasOpen = false;
 
 	function handleBackdropClick(event: MouseEvent) {
 		if (closeOnClickOutside && event.target === event.currentTarget) {
@@ -38,24 +36,48 @@
 		}
 	}
 
+	// Función para controlar el scroll
+	function lockScroll() {
+		if (browser && !wasOpen) {
+			originalOverflow = document.body.style.overflow;
+			document.body.style.overflow = 'hidden';
+			wasOpen = true;
+		}
+	}
+
+	function unlockScroll() {
+		if (browser && wasOpen) {
+			document.body.style.overflow = originalOverflow;
+			wasOpen = false;
+		}
+	}
+
 	onMount(() => {
 		if (browser) {
-			originalOverflow = document.body.style.overflow;
-			if (isOpen) document.body.style.overflow = 'hidden';
 			window.addEventListener('keydown', handleKeydown);
+
+			// Si el modal ya está abierto al montar, bloquear scroll
+			if (isOpen) {
+				lockScroll();
+			}
 		}
 	});
 
 	onDestroy(() => {
 		if (browser) {
-			document.body.style.overflow = originalOverflow;
 			window.removeEventListener('keydown', handleKeydown);
+			// Asegurar que el scroll se desbloquee al destruir el componente
+			unlockScroll();
 		}
 	});
 
-	// Vigilar isOpen para scroll lock
+	// Reactivo: controlar scroll basado en isOpen
 	$: if (browser) {
-		document.body.style.overflow = isOpen ? 'hidden' : originalOverflow;
+		if (isOpen) {
+			lockScroll();
+		} else {
+			unlockScroll();
+		}
 	}
 </script>
 
@@ -82,16 +104,16 @@
 						<slot />
 					</div>
 					<!-- Footer dentro del formulario -->
-					<footer class="flex justify-center border-t border-[var(--border)] p-4">
+					<footer class="flex justify-center gap-2 border-t border-[var(--border)] p-4">
 						<slot name="footer" />
 					</footer>
 				</form>
 			{:else}
-				<!-- Modal “estático”: content + footer separados -->
+				<!-- Modal "estático": content + footer separados -->
 				<div class="max-h-[calc(80vh-8rem)] overflow-y-auto bg-[var(--background)] p-4">
 					<slot />
 				</div>
-				<footer class="flex justify-center border-t border-[var(--border)] p-4">
+				<footer class="flex justify-center gap-2 border-t border-[var(--border)] p-4">
 					<slot name="footer" />
 				</footer>
 			{/if}

@@ -178,15 +178,24 @@
 		{
 			key: 'medidas',
 			label: 'Medidas',
-			content: MedidasHistoricas,
+			component: MedidasHistoricas,
 			leftIcon: 'dashboard',
-			actions: !esNino ? Button : null
+			props: {
+				clienteId,
+				cliente,
+				onUpdate: reloadClienteData
+			}
 		},
 		{
 			key: 'pagos',
 			label: 'Historial de Pagos',
-			content: HistorialPagos,
-			leftIcon: 'dashboard'
+			component: HistorialPagos,
+			leftIcon: 'dashboard',
+			props: {
+				clienteId,
+				cliente,
+				onUpdate: reloadClienteData
+			}
 		}
 	];
 </script>
@@ -205,8 +214,8 @@
 		</div>
 
 		<!-- Panel de información personal -->
-		<Panel title="Información personal" variant="purple" titleIcon="people" actions={Button}>
-			<svelte:fragment slot="actions">
+		<Panel title="Información personal" variant="purple" titleIcon="people">
+			<svelte:fragment slot="header-actions">
 				<div class="flex items-center gap-2">
 					{#if tieneDeudaPendiente}
 						<Button variant="danger" size="sm" on:click={handleNuevoPago}>
@@ -310,16 +319,7 @@
 
 		<!-- Panel con tabs -->
 		<Panel {tabs} defaultActiveTab="medidas">
-			<svelte:fragment slot="default">
-				{#if tabs.find((tab) => tab.key === 'medidas') && cliente && clienteId}
-					<MedidasHistoricas {clienteId} {cliente} onUpdate={reloadClienteData} />
-				{/if}
-				{#if tabs.find((tab) => tab.key === 'pagos') && cliente && clienteId}
-					<HistorialPagos {clienteId} {cliente} onUpdate={reloadClienteData} />
-				{/if}
-			</svelte:fragment>
-
-			<svelte:fragment slot="actions">
+			<svelte:fragment slot="tab-actions">
 				<Button variant="primary" size="sm" on:click={handleNuevaMedida}>
 					<Icon name="plus" size={16} className="mr-2" />
 					Nueva Medida

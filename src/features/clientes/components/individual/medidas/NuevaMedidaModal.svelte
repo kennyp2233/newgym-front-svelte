@@ -1,4 +1,4 @@
-<!-- src/routes/clientes/[id]/NuevaMedidaModal.svelte -->
+<!-- src/features/clientes/components/individual/medidas/NuevaMedidaModal.svelte -->
 <script lang="ts">
 	import { createForm } from 'svelte-forms-lib';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
@@ -149,7 +149,10 @@
 </script>
 
 <BaseModal {isOpen} {onClose} size="lg" closeOnClickOutside={false}>
-	
+	<svelte:fragment slot="header">
+		<h3 class="text-lg font-semibold">Nueva Medida</h3>
+	</svelte:fragment>
+
 	<form on:submit={handleSubmit}>
 		<div class="space-y-4">
 			<p class="mb-4 text-sm text-gray-600">
