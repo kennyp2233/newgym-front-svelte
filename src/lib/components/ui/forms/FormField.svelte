@@ -121,6 +121,7 @@
 		{unit}
 		{size}
 		{disabled}
+		{...$$restProps}
 		bind:value
 		on:input={handleInput}
 		on:change={handleChange}
