@@ -1,6 +1,6 @@
 <!-- src/features/estadisticas/components/GraficoDistribucionMembresias.svelte -->
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { browser } from '$app/environment';
 	import type { DistribucionMembresia } from '../api';
 
@@ -9,6 +9,8 @@
 
 	let chartContainer: HTMLDivElement;
 	let chartInstance: any = null;
+	let echartsLibrary: any = null;
+	let isChartReady = false;
 
 	// Colores para los gráficos
 	const colores = [
@@ -17,18 +19,12 @@
 		'#5BAE73', // var(--success)
 		'#E7C46C', // var(--warning)
 		'#E07A7A', // var(--error)
-		'#AABBC4' // var(--secondary)
+		'#AABBC4'  // var(--secondary)
 	];
 
 	onMount(async () => {
-		if (browser && data && data.length > 0) {
-			try {
-				// Importar ECharts dinámicamente
-				const echarts = await import('echarts');
-				createChart(echarts);
-			} catch (error) {
-				console.error('Error al cargar ECharts:', error);
-			}
+		if (browser) {
+			await initializeChart();
 		}
 	});
 
@@ -39,8 +35,34 @@
 		}
 	});
 
-	function createChart(echarts: any) {
-		if (!chartContainer || !data || data.length === 0) return;
+	async function initializeChart() {
+		try {
+			// Importar ECharts dinámicamente
+			echartsLibrary = await import('echarts');
+			isChartReady = true;
+			
+			// Esperar el siguiente tick para asegurar que el DOM esté listo
+			await tick();
+			
+			// Crear gráfico si tenemos datos
+			if (data && data.length > 0) {
+				createChart();
+			}
+		} catch (error) {
+			console.error('Error al cargar ECharts:', error);
+			isChartReady = false;
+		}
+	}
+
+	function createChart() {
+		if (!chartContainer || !echartsLibrary || !data || data.length === 0) {
+			console.log('No se puede crear el gráfico:', {
+				hasContainer: !!chartContainer,
+				hasLibrary: !!echartsLibrary,
+				hasData: !!(data && data.length > 0)
+			});
+			return;
+		}
 
 		// Destruir gráfico anterior si existe
 		if (chartInstance) {
@@ -48,12 +70,12 @@
 		}
 
 		// Inicializar el gráfico
-		chartInstance = echarts.init(chartContainer);
+		chartInstance = echartsLibrary.init(chartContainer);
 
 		// Preparar los datos para el gráfico
 		const seriesData = data.map((item, index) => ({
 			value: item.cantidad,
-			name: `${item.nombrePlan} (${item.porcentaje}%)`,
+			name: item.nombrePlan,
 			itemStyle: {
 				color: colores[index % colores.length]
 			}
@@ -64,23 +86,28 @@
 			title: {
 				text: 'Distribución de Membresías',
 				left: 'center',
+				top: 10,
 				textStyle: {
 					fontSize: 16,
-					fontWeight: 'bold'
+					fontWeight: 'bold',
+					color: '#333'
 				}
 			},
 			tooltip: {
 				trigger: 'item',
-				formatter: '{a} <br/>{b}: {c} ({d}%)'
+				formatter: function(params: any) {
+					return `${params.name}<br/>${params.value} clientes (${params.percent}%)`;
+				}
 			},
 			legend: {
 				type: 'scroll',
 				orient: 'vertical',
-				right: 10,
+				right: 20,
 				top: 'middle',
-				formatter: (name: string) => {
-					// Extraer solo el nombre del plan (sin el porcentaje)
-					return name.split(' (')[0];
+				itemWidth: 14,
+				itemHeight: 14,
+				textStyle: {
+					fontSize: 12
 				}
 			},
 			series: [
@@ -91,99 +118,93 @@
 					center: ['40%', '50%'],
 					avoidLabelOverlap: true,
 					itemStyle: {
-						borderRadius: 10,
+						borderRadius: 8,
 						borderColor: '#fff',
 						borderWidth: 2
 					},
 					label: {
-						show: false,
-						position: 'center'
+						show: true,
+						position: 'outside',
+						formatter: '{b}\n{d}%',
+						fontSize: 11
 					},
 					emphasis: {
-						label: {
-							show: true,
-							fontSize: 16,
-							fontWeight: 'bold'
+						itemStyle: {
+							shadowBlur: 10,
+							shadowOffsetX: 0,
+							shadowColor: 'rgba(0, 0, 0, 0.5)'
 						}
-					},
-					labelLine: {
-						show: false
 					},
 					data: seriesData
 				}
 			],
-			toolbox: {
-				feature: {
-					saveAsImage: {
-						title: 'Guardar imagen',
-						pixelRatio: 2
-					}
-				},
-				right: 15,
-				top: 15
-			}
+			responsive: true
 		};
 
 		// Actualizar el gráfico
-		chartInstance.setOption(options);
+		chartInstance.setOption(options, true);
 
-		// Función para manejar el resize
+		// Manejar resize
 		const handleResize = () => {
-			if (chartInstance) {
+			if (chartInstance && !chartInstance.isDisposed()) {
 				chartInstance.resize();
 			}
 		};
 
 		window.addEventListener('resize', handleResize);
 
-		// Limpiar event listener al destruir
-		return () => {
+		// Cleanup function
+		const cleanup = () => {
 			window.removeEventListener('resize', handleResize);
 		};
+
+		return cleanup;
 	}
 
 	// Reactivamente actualizar el gráfico cuando cambien los datos
-	$: if (browser && chartInstance && data && data.length > 0) {
-		updateChart();
-	}
-
-	async function updateChart() {
-		if (!chartInstance || !data) return;
-
-		const seriesData = data.map((item, index) => ({
-			value: item.cantidad,
-			name: `${item.nombrePlan} (${item.porcentaje}%)`,
-			itemStyle: {
-				color: colores[index % colores.length]
-			}
-		}));
-
-		chartInstance.setOption({
-			series: [
-				{
-					data: seriesData
-				}
-			]
+	$: if (isChartReady && data && data.length > 0) {
+		tick().then(() => {
+			createChart();
 		});
 	}
+
+	// Calcular totales
+	$: totalClientes = data ? data.reduce((sum, item) => sum + item.cantidad, 0) : 0;
 </script>
 
 <div class={`space-y-4 ${className}`}>
-	{#if !data || data.length === 0}
+	{#if !data}
 		<div
 			class="flex h-80 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--sections)] text-gray-500"
 		>
-			{data === null ? 'Cargando datos...' : 'No hay datos disponibles'}
+			<div class="text-center">
+				<div class="mb-2 h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent mx-auto"></div>
+				<p>Cargando datos...</p>
+			</div>
+		</div>
+	{:else if data.length === 0}
+		<div
+			class="flex h-80 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--sections)] text-gray-500"
+		>
+			<p>No hay datos disponibles</p>
 		</div>
 	{:else}
 		<!-- Gráfico -->
-		<div
-			bind:this={chartContainer}
-			class="h-80 w-full rounded-lg border border-[var(--border)] bg-[var(--sections)]"
-		>
-			{#if !browser}
-				<div class="flex h-full items-center justify-center text-gray-500">Cargando gráfico...</div>
-			{/if}
+		<div class="rounded-lg border border-[var(--border)] bg-[var(--sections)] p-4">
+			<div
+				bind:this={chartContainer}
+				class="h-80 w-full"
+				style="min-height: 320px;"
+			>
+				{#if !isChartReady}
+					<div class="flex h-full items-center justify-center text-gray-500">
+						<div class="text-center">
+							<div class="mb-2 h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent mx-auto"></div>
+							<p>Inicializando gráfico...</p>
+						</div>
+					</div>
+				{/if}
+			</div>
 		</div>
 
 		<!-- Tabla con datos detallados -->
@@ -191,35 +212,40 @@
 			<table class="min-w-full rounded-lg border border-[var(--border)] bg-[var(--sections)]">
 				<thead class="bg-[var(--sections-hover)]">
 					<tr>
-						<th class="px-4 py-2 text-left text-sm font-medium text-[var(--letter)]"> Plan </th>
-						<th class="px-4 py-2 text-center text-sm font-medium text-[var(--letter)]">
+						<th class="px-4 py-3 text-left text-sm font-medium text-[var(--letter)]"> Plan </th>
+						<th class="px-4 py-3 text-center text-sm font-medium text-[var(--letter)]">
 							Clientes
 						</th>
-						<th class="px-4 py-2 text-center text-sm font-medium text-[var(--letter)]">
+						<th class="px-4 py-3 text-center text-sm font-medium text-[var(--letter)]">
 							Porcentaje
 						</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each data as item, index}
-						<tr class="border-t border-[var(--border)]">
-							<td class="px-4 py-2 text-sm">
+						<tr class="border-t border-[var(--border)] hover:bg-[var(--sections-hover)]">
+							<td class="px-4 py-3 text-sm">
 								<div class="flex items-center">
 									<div
-										class="mr-2 h-3 w-3 rounded-full"
+										class="mr-3 h-4 w-4 rounded-full"
 										style="background-color: {colores[index % colores.length]}"
 									></div>
-									{item.nombrePlan}
+									<span class="font-medium">{item.nombrePlan}</span>
 								</div>
 							</td>
-							<td class="px-4 py-2 text-center text-sm font-medium">
+							<td class="px-4 py-3 text-center text-sm font-semibold">
 								{item.cantidad}
 							</td>
-							<td class="px-4 py-2 text-center text-sm font-medium">
-								{item.porcentaje}%
+							<td class="px-4 py-3 text-center text-sm font-semibold">
+								{item.porcentaje.toFixed(1)}%
 							</td>
 						</tr>
 					{/each}
+					<tr class="border-t border-[var(--border)] bg-[var(--sections-hover)] font-bold">
+						<td class="px-4 py-3 text-sm">Total</td>
+						<td class="px-4 py-3 text-center text-sm">{totalClientes}</td>
+						<td class="px-4 py-3 text-center text-sm">100.0%</td>
+					</tr>
 				</tbody>
 			</table>
 		</div>

@@ -1,12 +1,23 @@
 <!-- src/features/estadisticas/components/DashboardContabilidad.svelte -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { toasts } from '$lib/stores/toastStore';
-	import { estadisticas } from '../stores/estadisticasStore';
+	import { 
+		estadisticas, 
+		loading, 
+		error, 
+		resumenData, 
+		distribucionData, 
+		tendenciaData, 
+		actividadData,
+		anioSeleccionado,
+		mesSeleccionado,
+		initialized
+	} from '../stores/estadisticasStore';
 	import ResumenTarjetas from './ResumenTarjetas.svelte';
 	import GraficoDistribucionMembresias from './GraficoDistribucionMembresias.svelte';
 	import GraficoTendenciaMensual from './GraficoTendenciaMensual.svelte';
@@ -15,11 +26,35 @@
 
 	let dashboardContainer: HTMLDivElement;
 	let isGeneratingPDF = false;
+	let unsubscribe: (() => void) | null = null;
 
 	onMount(() => {
-		// Cargar todos los datos del dashboard al montar
-		estadisticas.cargarDashboardCompleto();
+		// Suscribirse al store y cargar datos solo si no están inicializados
+		unsubscribe = initialized.subscribe((isInit) => {
+			if (!isInit) {
+				cargarDatosDashboard();
+			}
+		});
 	});
+
+	onDestroy(() => {
+		if (unsubscribe) {
+			unsubscribe();
+		}
+	});
+
+	// Función separada para cargar datos con mejor manejo de errores
+	async function cargarDatosDashboard() {
+		try {
+			await estadisticas.cargarDashboardCompleto();
+			if ($error) {
+				console.warn('Error en datos del dashboard, usando datos de prueba');
+			}
+		} catch (error) {
+			console.error('Error al cargar dashboard:', error);
+			toasts.showToast('Error al cargar los datos del dashboard, mostrando datos de prueba', 'warning');
+		}
+	}
 
 	// Función para generar un informe PDF completo
 	async function generarInformePDF() {
@@ -121,123 +156,154 @@
 		estadisticas.cargarActividadesSemanales(mes);
 	}
 
-	// Suscribirse al store
-	$: data = $estadisticas;
+	function recargarDatos() {
+		estadisticas.reset();
+		cargarDatosDashboard();
+	}
+
+	// Estados reactivos del store
+	$: isLoading = $loading;
+	$: hasError = $error;
+	$: resumeData = $resumenData;
+	$: distributionData = $distribucionData;
+	$: tendencyData = $tendenciaData;
+	$: activityData = $actividadData;
+	$: selectedAnio = $anioSeleccionado;
+	$: selectedMes = $mesSeleccionado;
 </script>
 
 <div bind:this={dashboardContainer} class="space-y-6">
 	<!-- Cabecera con título y botón de exportar -->
 	<div class="flex flex-wrap items-center justify-between gap-4">
 		<h1 class="text-2xl font-bold text-[var(--letter)]">Dashboard de Contabilidad</h1>
-		<Button
-			variant="primary"
-			on:click={generarInformePDF}
-			leftIcon="plus"
-			isLoading={isGeneratingPDF}
-			disabled={isGeneratingPDF}
-		>
-			{isGeneratingPDF ? 'Generando...' : 'Exportar Informe'}
-		</Button>
-	</div>
-
-	<!-- Mostrar error si existe -->
-	{#if data.error}
-		<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-red-600">
-			<p>Error al cargar los datos del dashboard: {data.error}</p>
+		<div class="flex gap-2">
+			{#if hasError}
+				<Button
+					variant="outline"
+					on:click={recargarDatos}
+					leftIcon="refresh"
+					size="sm"
+				>
+					Recargar
+				</Button>
+			{/if}
 			<Button
-				variant="outline"
-				size="sm"
-				className="mt-2"
-				on:click={() => estadisticas.cargarDashboardCompleto()}
+				variant="primary"
+				on:click={generarInformePDF}
+				leftIcon="plus"
+				isLoading={isGeneratingPDF}
+				disabled={isGeneratingPDF}
 			>
-				Reintentar
+				{isGeneratingPDF ? 'Generando...' : 'Exportar Informe'}
 			</Button>
 		</div>
-	{/if}
-
-	<!-- Tarjetas de resumen -->
-	<div class="seccion-captura">
-		<ResumenTarjetas data={data.resumenData} />
 	</div>
 
-	<!-- Grid responsive para gráficos -->
-	<div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-		<!-- Distribución de membresías -->
-		<Panel
-			title="Distribución de Membresías"
-			titleIcon="dashboard"
-			variant="purple"
-			className="seccion-captura"
-		>
-			<GraficoDistribucionMembresias data={data.distribucionData} />
-		</Panel>
-
-		<!-- Tendencia Mensual -->
-		<Panel
-			title="Tendencia Mensual"
-			titleIcon="dashboard"
-			variant="purple"
-			className="seccion-captura"
-		>
-			<GraficoTendenciaMensual
-				data={data.tendenciaData}
-				anio={data.anioSeleccionado}
-				onAnioChange={handleAnioChange}
-			/>
-		</Panel>
-	</div>
-
-	<!-- Segunda fila de gráficos -->
-	<div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-		<!-- Actividad Semanal -->
-		<Panel
-			title="Actividad Semanal"
-			titleIcon="dashboard"
-			variant="purple"
-			className="seccion-captura"
-		>
-			<GraficoActividadSemanal
-				data={data.actividadData}
-				mes={data.mesSeleccionado}
-				anio={data.anioSeleccionado}
-				onMesChange={handleMesChange}
-				onAnioChange={handleAnioChange}
-			/>
-		</Panel>
-
-		<!-- Tabla de inscripciones -->
-		<Panel
-			title="Detalle de Inscripciones"
-			titleIcon="dashboard"
-			variant="purple"
-			className="seccion-captura"
-		>
-			<TablaInscripciones mes={data.mesSeleccionado} anio={data.anioSeleccionado} />
-		</Panel>
-	</div>
-
-	<!-- Información adicional -->
-	<div class="seccion-captura">
-		<Panel title="Información del Sistema" variant="default">
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-				<div class="rounded-lg bg-[var(--sections-hover)] p-4 text-center">
-					<Icon name="dashboard" size={32} className="mx-auto mb-2 text-[var(--primary)]" />
-					<h3 class="font-semibold">Dashboard</h3>
-					<p class="text-sm text-gray-600">Estadísticas en tiempo real</p>
-				</div>
-				<div class="rounded-lg bg-[var(--sections-hover)] p-4 text-center">
-					<Icon name="check" size={32} className="mx-auto mb-2 text-green-600" />
-					<h3 class="font-semibold">Automatización</h3>
-					<p class="text-sm text-gray-600">Reportes automáticos</p>
-				</div>
-				<div class="rounded-lg bg-[var(--sections-hover)] p-4 text-center">
-					<Icon name="people" size={32} className="mx-auto mb-2 text-blue-600" />
-					<h3 class="font-semibold">Gestión Integral</h3>
-					<p class="text-sm text-gray-600">Control total del gimnasio</p>
-				</div>
+	<!-- Mostrar indicador de carga general -->
+	{#if isLoading && !$initialized}
+		<div class="flex items-center justify-center py-12">
+			<div class="text-center">
+				<div class="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent mx-auto"></div>
+				<p class="text-lg font-medium text-[var(--letter)]">Cargando dashboard...</p>
+				<p class="text-sm text-gray-500">Esto puede tardar unos momentos</p>
 			</div>
-		</Panel>
-	</div>
+		</div>
+	{:else}
+		<!-- Mostrar error si existe -->
+		{#if hasError}
+			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-center text-yellow-700">
+				<div class="flex items-center justify-center gap-2 mb-2">
+					<Icon name="warning" size={20} />
+					<p class="font-medium">Algunos datos no se pudieron cargar</p>
+				</div>
+				<p class="text-sm">Se están mostrando datos de ejemplo. Verifique la conexión con el servidor.</p>
+			</div>
+		{/if}
+
+		<!-- Tarjetas de resumen -->
+		<div class="seccion-captura">
+			<ResumenTarjetas data={resumeData} />
+		</div>
+
+		<!-- Grid responsive para gráficos -->
+		<div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+			<!-- Distribución de membresías -->
+			<Panel
+				title="Distribución de Membresías"
+				titleIcon="dashboard"
+				variant="purple"
+				className="seccion-captura"
+			>
+				<GraficoDistribucionMembresias data={distributionData} />
+			</Panel>
+
+			<!-- Tendencia Mensual -->
+			<Panel
+				title="Tendencia Mensual"
+				titleIcon="dashboard"
+				variant="purple"
+				className="seccion-captura"
+			>
+				<GraficoTendenciaMensual
+					data={tendencyData}
+					anio={selectedAnio}
+					onAnioChange={handleAnioChange}
+				/>
+			</Panel>
+		</div>
+
+		<!-- Segunda fila de gráficos -->
+		<div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+			<!-- Actividad Semanal -->
+			<Panel
+				title="Actividad Semanal"
+				titleIcon="dashboard"
+				variant="purple"
+				className="seccion-captura"
+			>
+				<GraficoActividadSemanal
+					data={activityData}
+					mes={selectedMes}
+					anio={selectedAnio}
+					onMesChange={handleMesChange}
+					onAnioChange={handleAnioChange}
+				/>
+			</Panel>
+
+			<!-- Tabla de inscripciones -->
+			<Panel
+				title="Detalle de Inscripciones"
+				titleIcon="dashboard"
+				variant="purple"
+				className="seccion-captura"
+			>
+				<TablaInscripciones mes={selectedMes} anio={selectedAnio} />
+			</Panel>
+		</div>
+
+		<!-- Información adicional -->
+		<div class="seccion-captura">
+			<Panel title="Información del Sistema" variant="default">
+				<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+					<div class="rounded-lg bg-[var(--sections-hover)] p-4 text-center">
+						<Icon name="dashboard" size={32} className="mx-auto mb-2 text-[var(--primary)]" />
+						<h3 class="font-semibold">Dashboard</h3>
+						<p class="text-sm text-gray-600">Estadísticas en tiempo real</p>
+					</div>
+					<div class="rounded-lg bg-[var(--sections-hover)] p-4 text-center">
+						<Icon name="check" size={32} className="mx-auto mb-2 text-green-600" />
+						<h3 class="font-semibold">Automatización</h3>
+						<p class="text-sm text-gray-600">Reportes automáticos</p>
+					</div>
+					<div class="rounded-lg bg-[var(--sections-hover)] p-4 text-center">
+						<Icon name="people" size={32} className="mx-auto mb-2 text-blue-600" />
+						<h3 class="font-semibold">Gestión Integral</h3>
+						<p class="text-sm text-gray-600">Control total del gimnasio</p>
+					</div>
+				</div>
+			</Panel>
+		</div>
+	{/if}
 </div>
 
 <style>
