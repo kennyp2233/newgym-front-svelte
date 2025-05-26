@@ -11,15 +11,8 @@
 	export let name = '';
 	export let disabled = false;
 	export let required = false;
-
 	// Crear un id único si no se proporciona
 	$: inputId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
-
-	// Manejar el evento change para actualizar el valor
-	function handleChange(event: Event) {
-		const target = event.target as HTMLSelectElement;
-		value = target.value;
-	}
 </script>
 
 <div class="w-full space-y-1.5">
@@ -30,11 +23,10 @@
 		</label>
 	{/if}
 
-	<div class="relative">
-		<select
+	<div class="relative">		<select
 			id={inputId}
 			{name}
-			{value}
+			bind:value
 			{disabled}
 			{required}
 			class={`w-full cursor-pointer appearance-none rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 pr-10 focus:ring-2 focus:ring-offset-2 focus-visible:outline-none
@@ -42,7 +34,7 @@
         ${size === 'md' && 'h-10 text-base'}
         ${size === 'lg' && 'h-12 text-lg'}
         ${error && 'border-red-500 focus:ring-red-500'}`}
-			on:change={handleChange}
+			on:change
 			on:blur
 			on:focus
 		>

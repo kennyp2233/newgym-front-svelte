@@ -3,6 +3,9 @@
 	import NumberInput from '../NumberInput.svelte';
 	import Select from '../Select.svelte';
 	import DatePicker from '../DatePicker.svelte';
+	import { createEventDispatcher } from 'svelte';
+
+	const dispatch = createEventDispatcher();
 
 	export let name: string;
 	export let label: string = '';
@@ -18,43 +21,25 @@
 	export let size: 'sm' | 'md' | 'lg' = 'md';
 	export let disabled: boolean = false;
 	export let minDate: string | Date | null = null;
-	export let maxDate: string | Date | null = null;
-
-	// Props para integración con Felte
+	export let maxDate: string | Date | null = null;	// Props para integración con svelte-forms-lib
 	export let value: any = '';
-	export let errors: any = {};
-	export let touched: any = {};
+	export let errors: Record<string, string> = {};
+	export let touched: Record<string, boolean> = {};
 
-	// Calcular error y mensaje de error correctamente para Felte
-	$: fieldErrors = errors[name] || [];
-	$: fieldTouched = touched[name] || false;
-
-	// Manejar tanto arrays como strings para los errores
-	$: hasError =
-		fieldTouched &&
-		((Array.isArray(fieldErrors) && fieldErrors.length > 0) ||
-			(typeof fieldErrors === 'string' && fieldErrors.length > 0));
-
-	$: errorMessage = hasError
-		? Array.isArray(fieldErrors)
-			? fieldErrors[0]
-			: String(fieldErrors)
-		: '';
-
+	// Calcular error y mensaje de error para svelte-forms-lib
+	$: fieldError = errors?.[name] || '';
+	$: fieldTouched = touched?.[name] || false;
+	// svelte-forms-lib devuelve errores como strings simples
+	$: hasError = Boolean(fieldTouched && fieldError && fieldError.length > 0);
+	$: errorMessage = hasError ? fieldError : '';
 	// Determinar si el campo es requerido basado en si tiene errores de validación
-	$: isRequired =
-		Array.isArray(fieldErrors) && fieldErrors.length > 0
-			? fieldErrors.some((error) => typeof error === 'string' && error.includes('requerido'))
-			: typeof fieldErrors === 'string' && fieldErrors.includes('requerido');
-
-	// Función para manejar cambios - solo emite eventos, no modifica value directamente
+	$: isRequired = !!(fieldError && fieldError.includes('requerido'));
 	function handleInput(event: Event) {
-		// Dejar que el binding natural de Svelte maneje la actualización
-		// Solo propagar el evento hacia arriba si es necesario
+		dispatch('input', event);
 	}
 
 	function handleChange(event: Event) {
-		// Propagar evento hacia arriba
+		dispatch('change', event);
 	}
 </script>
 

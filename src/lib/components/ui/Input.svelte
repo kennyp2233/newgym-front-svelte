@@ -19,15 +19,8 @@
 	export let max: number | undefined = undefined;
 	// Agregar prop required
 	export let required = false;
-
 	// Crear un id único si no se proporciona
 	$: inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
-
-	// Manejar el evento input para actualizar el valor
-	function handleInput(event: Event) {
-		const target = event.target as HTMLInputElement;
-		value = target.value;
-	}
 </script>
 
 <div class="w-full space-y-1.5">
@@ -41,12 +34,11 @@
 				<Icon name={leftIcon} size={16} className="text-gray-400" />
 			</div>
 		{/if}
-
 		<input
 			id={inputId}
 			{name}
 			{disabled}
-			{value}
+			bind:value
 			{type}
 			{placeholder}
 			{min}
@@ -59,7 +51,7 @@
         ${size === 'md' && 'h-10 text-base'}
         ${size === 'lg' && 'h-12 text-lg'}
         ${error && 'border-red-500 focus:ring-red-500'}`}
-			on:input={handleInput}
+			on:input
 			on:change
 			on:keydown
 			on:focus

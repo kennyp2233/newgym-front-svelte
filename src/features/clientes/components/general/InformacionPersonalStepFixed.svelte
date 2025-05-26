@@ -1,4 +1,3 @@
-<!-- src/features/clientes/components/general/InformacionPersonalStep.svelte -->
 <script lang="ts">
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
@@ -9,6 +8,7 @@
 	export let errors: any;
 	export let touched: any;
 	export let planes: Plan[] = [];
+	export let updateField: ((field: string, value: any) => void) | undefined = undefined;
 
 	// Filtrar planes según ocupación
 	$: planesFiltrados = filterPlanesPorOcupacion(data.ocupacion || TipoOcupacion.ESTUDIANTE);
@@ -24,15 +24,20 @@
 			return planes.filter((plan) => plan.tag === 'Trabajo');
 		}
 	}
-
 	// Selección automática de plan cuando cambia ocupación
-	$: if (data.ocupacion) {
-		data.idPlan = planesFiltrados[0].idPlan.toString();
+	let lastOcupacion = data.ocupacion;
+	$: if (data.ocupacion && data.ocupacion !== lastOcupacion && planesFiltrados.length > 0 && updateField) {
+		lastOcupacion = data.ocupacion;
+		const newPlanId = planesFiltrados[0].idPlan.toString();
+		updateField('idPlan', newPlanId);
 	}
-
 	// Limpiar puesto de trabajo si no es ocupación de trabajo
-	$: if (data.ocupacion && data.ocupacion !== TipoOcupacion.TRABAJO) {
-		data.puestoTrabajo = '';
+	let lastOcupacionForJob = data.ocupacion;
+	$: if (data.ocupacion !== lastOcupacionForJob && updateField) {
+		lastOcupacionForJob = data.ocupacion;
+		if (data.ocupacion !== TipoOcupacion.TRABAJO && data.puestoTrabajo) {
+			updateField('puestoTrabajo', '');
+		}
 	}
 
 	function calcularEdad(fecha: string): number {
@@ -63,8 +68,7 @@
 	}
 </script>
 
-<div class="space-y-4">
-	<FormRow>
+<div class="space-y-4">	<FormRow>
 		<FormField
 			name="cedula"
 			label="Cédula"
@@ -101,7 +105,6 @@
 			{touched}
 		/>
 	</FormRow>
-
 	<FormRow>
 		<FormField
 			name="ciudad"
@@ -147,7 +150,6 @@
 			{/if}
 		</div>
 	</FormRow>
-
 	<FormRow>
 		<FormField
 			name="correo"
@@ -194,11 +196,10 @@
 			name="puestoTrabajo"
 			label="Puesto de trabajo"
 			placeholder="Ej: Albañil"
-			disabled={data.ocupacion !== TipoOcupacion.TRABAJO}
 			bind:value={data.puestoTrabajo}
 			{errors}
 			{touched}
-			helperText={data.ocupacion !== TipoOcupacion.TRABAJO ? 'No aplica para esta ocupación' : ''}
+			disabled={data.ocupacion !== TipoOcupacion.TRABAJO}
 		/>
 	</FormRow>
 </div>

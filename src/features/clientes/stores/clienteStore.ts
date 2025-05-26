@@ -35,20 +35,21 @@ function createClienteStore() {
                     error: error instanceof Error ? error.message : 'Error desconocido'
                 }));
             }
-        },
-
-        // Agregar cliente
+        },        // Agregar cliente
         async addCliente(clienteData: any) {
             update(state => ({ ...state, loading: true }));
             try {
                 const nuevoCliente = await clienteService.registrarCompleto(clienteData);
-                if (nuevoCliente) {
-                    update(state => ({
-                        ...state,
-                        clientes: [nuevoCliente, ...state.clientes],
-                        loading: false
-                    }));
-                }
+
+                // Refrescar la lista completa para asegurar consistencia
+                const clientesActualizados = await clienteService.getClientes();
+
+                update(state => ({
+                    ...state,
+                    clientes: clientesActualizados,
+                    loading: false
+                }));
+
                 return nuevoCliente;
             } catch (error) {
                 update(state => ({ ...state, loading: false }));

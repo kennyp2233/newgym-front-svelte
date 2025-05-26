@@ -1,14 +1,14 @@
-<!-- src/features/clientes/components/general/ResumenStep.svelte -->
+<!-- src/features/clientes/components/general/ResumenStepFixed.svelte -->
 <script lang="ts">
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
 	import { calcularIMC } from '$lib/utils';
 	import { planService, type Plan } from '../../../planes/api';
-
 	export let data: any;
 	export let errors: any;
 	export let touched: any;
 	export let planes: Plan[] = [];
+	export let updateField: ((field: string, value: any) => void) | undefined = undefined;
 
 	$: planSeleccionado = planes.find((p) => p.idPlan === parseInt(data.idPlan || '0'));
 	$: fechaFin =
@@ -23,7 +23,6 @@
 	<p class="mb-4 text-sm text-gray-600">
 		Revisa cuidadosamente la información antes de finalizar el registro.
 	</p>
-
 	<FormRow>
 		<FormField
 			name="fechaInicio"

@@ -1,9 +1,10 @@
 <!-- src/lib/components/ui/DatePicker.svelte -->
-<script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+<script lang="ts">	import { onMount, onDestroy, createEventDispatcher } from 'svelte';
 	import flatpickr from 'flatpickr';
 	import { Spanish } from 'flatpickr/dist/l10n/es.js';
 	import 'flatpickr/dist/flatpickr.min.css';
+
+	const dispatch = createEventDispatcher();
 
 	export let value: string = '';
 	export let label: string = '';
@@ -31,11 +32,13 @@
 				disableMobile: true,
 				minDate: minDate || undefined,
 				maxDate: maxDate || undefined,
-				defaultDate: value || undefined,
-				onChange: (selectedDates) => {
+				defaultDate: value || undefined,				onChange: (selectedDates) => {
 					if (selectedDates.length > 0) {
 						const date = selectedDates[0];
 						value = date.toISOString().split('T')[0];
+						// Dispatch events para svelte-forms-lib
+						dispatch('input', { target: { value } });
+						dispatch('change', { target: { value } });
 					}
 				}
 			});
@@ -62,10 +65,9 @@
 		</label>
 	{/if}
 
-	<div class="relative">
-		<input
+	<div class="relative">		<input
 			bind:this={inputElement}
-			{value}
+			bind:value
 			{id}
 			{name}
 			{disabled}

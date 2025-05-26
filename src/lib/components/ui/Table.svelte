@@ -46,19 +46,19 @@
 		selected.set(new Set());
 		onSelectionChange?.([]);
 	}
-
 	function toggleRow(item: any, checked: boolean) {
+		if (!item) return; // Safety check
 		selected.update((s) => {
 			const copy = new Set(s);
 			const key = keyExtractor(item);
 			checked ? copy.add(key) : copy.delete(key);
-			onSelectionChange?.(data.filter((d) => copy.has(keyExtractor(d))));
+			onSelectionChange?.(data.filter((d) => d && copy.has(keyExtractor(d))));
 			return copy;
 		});
 	}
 
 	function toggleAll(checked: boolean) {
-		selected.set(checked ? new Set(data.map((d) => keyExtractor(d))) : new Set());
+		selected.set(checked ? new Set(data.filter(d => d).map((d) => keyExtractor(d))) : new Set());
 		onSelectionChange?.(checked ? [...data] : []);
 	}
 
@@ -132,9 +132,8 @@
 						<th class="border-b border-[var(--border)] p-3 text-right">Actions</th>
 					{/if}
 				</tr>
-			</thead>
-			<tbody>
-				{#each data as item, i (keyExtractor(item))}
+			</thead>			<tbody>
+				{#each data.filter(item => item) as item, i (keyExtractor(item))}
 					<tr
 						class={`${isRowClickable ? 'cursor-pointer hover:bg-gray-50' : ''} ${rowClassName(item, i)}`}
 						on:click={() => onRowClick?.(item)}

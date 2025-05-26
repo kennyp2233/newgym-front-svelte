@@ -8,31 +8,35 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
-	import ClienteFormModal from '../../features/clientes/components/general/ClienteFormModal.svelte';
 	import { clienteStore } from '../../features/clientes/stores/clienteStore';
 	import { toasts } from '$lib/stores/toastStore';
 	import { calcularDiasRestantes, formatDate } from '$lib/utils';
 	import type { Cliente, RegistroCompletoDTO } from '../../features/clientes/api';
 	import type { ClienteFormData } from '../../features/clientes/forms/validation';
+	import ClienteFormModal from '../../features/clientes/components/general/ClienteFormModal.svelte';
 
 	let searchTerm = '';
 	let showDeleteModal = false;
 	let showFormModal = false;
 	let selectedCliente: Cliente | null = null;
 	let clienteToEdit: Partial<ClienteFormData> | null = null;
-	let isEditing = false;
-
-	// Reactive statement para filtrar clientes
-	$: filteredClientes = $clienteStore.clientes.filter(
+	let isEditing = false; // Reactive statement para filtrar clientes
+	$: filteredClientes = ($clienteStore.clientes || []).filter(
 		(cliente) =>
-			`${cliente.nombre} ${cliente.apellido}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			cliente.cedula.includes(searchTerm) ||
-			cliente.celular.includes(searchTerm)
+			cliente &&
+			cliente.idCliente &&
+			(`${cliente.nombre} ${cliente.apellido}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+				cliente.cedula.includes(searchTerm) ||
+				cliente.celular.includes(searchTerm))
 	);
 
+	// Debug reactivo para ver cambios en el store
+	$: if ($clienteStore.clientes) {
+		console.log('Clientes en store actualizados:', $clienteStore.clientes.length, 'clientes');
+	}
 	// Determinar el estado de la membresía
 	function determinarEstado(cliente: Cliente) {
-		if (!cliente.inscripciones || cliente.inscripciones.length === 0) {
+		if (!cliente || !cliente.inscripciones || cliente.inscripciones.length === 0) {
 			return 'Sin membresía';
 		}
 
@@ -55,7 +59,8 @@
 			key: 'nombre',
 			header: 'Nombres',
 			width: '22%',
-			render: (_: string, cliente: Cliente) => `${cliente.nombre} ${cliente.apellido}`
+			render: (_: string, cliente: Cliente) =>
+				cliente ? `${cliente.nombre || ''} ${cliente.apellido || ''}` : ''
 		},
 		{
 			key: 'cedula',
@@ -72,13 +77,12 @@
 			header: 'Plan',
 			width: '20%',
 			render: (_: string, cliente: Cliente) => {
-				if (!cliente.inscripciones || cliente.inscripciones.length === 0) {
+				if (!cliente || !cliente.inscripciones || cliente.inscripciones.length === 0) {
 					return 'Sin plan';
 				}
 				const inscripcionActiva = cliente.inscripciones.sort(
 					(a, b) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()
 				)[0];
-
 				return inscripcionActiva?.plan?.nombre ?? 'Sin plan activo';
 			}
 		},
@@ -87,7 +91,8 @@
 			header: 'Días restantes',
 			width: '12%',
 			render: (_: string, cliente: Cliente) => {
-				if (!cliente.inscripciones || cliente.inscripciones.length === 0) return '0 días';
+				if (!cliente || !cliente.inscripciones || cliente.inscripciones.length === 0)
+					return '0 días';
 
 				const inscripcionActiva = cliente.inscripciones.sort(
 					(a, b) => new Date(b.fechaFin || '').getTime() - new Date(a.fechaFin || '').getTime()
@@ -104,6 +109,9 @@
 			header: 'Estado',
 			width: '12%',
 			render: (_: string, cliente: Cliente) => {
+				if (!cliente)
+					return '<span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap bg-gray-100 text-gray-800">Sin datos</span>';
+
 				const estado = determinarEstado(cliente);
 				let className = '';
 
@@ -194,7 +202,6 @@
 			selectedCliente = null;
 		}
 	}
-
 	async function handleClienteSubmit(registroData: RegistroCompletoDTO) {
 		try {
 			if (isEditing && selectedCliente) {
@@ -203,11 +210,14 @@
 				toasts.showToast('Cliente actualizado correctamente', 'success');
 			} else {
 				// Crear nuevo cliente
+				console.log('Enviando datos del cliente:', registroData);
 				await clienteStore.addCliente(registroData);
+				console.log('Cliente agregado, store actualizado');
 				toasts.showToast('Cliente registrado correctamente', 'success');
 			}
 			showFormModal = false;
 		} catch (error) {
+			console.error('Error en handleClienteSubmit:', error);
 			// El error ya se maneja en el modal
 			throw error;
 		}
@@ -234,11 +244,10 @@
 					Agregar Cliente
 				</Button>
 			</div>
-
 			<Table
 				data={filteredClientes}
 				{columns}
-				keyExtractor={(item) => item.idCliente.toString()}
+				keyExtractor={(item) => item?.idCliente?.toString() || 'unknown'}
 				onRowClick={handleViewDetails}
 				isLoading={$clienteStore.loading}
 				emptyStateMessage="No se encontraron clientes que coincidan con la búsqueda"

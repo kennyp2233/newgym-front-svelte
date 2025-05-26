@@ -22,66 +22,110 @@ export const Step1Schema = yup.object({
     ocupacion: yup
         .mixed<TipoOcupacion>()
         .oneOf(Object.values(TipoOcupacion))
-        .required('La ocupación es requerida'),
-    puestoTrabajo: yup.string().when('ocupacion', {
-        is: TipoOcupacion.TRABAJO,
-        then: (schema) => schema.required('El puesto de trabajo es requerido para trabajadores'),
-        otherwise: (schema) => schema.notRequired(),
-    }),
+        .required('La ocupación es requerida'), puestoTrabajo: yup.string().when('ocupacion', {
+            is: TipoOcupacion.TRABAJO,
+            then: (schema) => schema.required('El puesto de trabajo es requerido para trabajadores'),
+            otherwise: (schema) => schema.notRequired(),
+        }),
+    idPlan: yup.string()
+        .required('Debe seleccionar un plan')
+        .test('not-empty', 'Debe seleccionar un plan', (value) => {
+            return value !== '' && value !== null && value !== undefined;
+        }),
 });
 
 export const Step2Schema = yup.object({
     peso: yup
-        .number()
-        .typeError('Peso debe ser un número')
-        .min(1, 'Peso ≥ 1kg')
-        .max(300, 'Peso ≤ 300kg')
+        .mixed()
+        .test('is-number', 'Peso debe ser un número', (value) => {
+            if (value === '' || value === null || value === undefined) return false;
+            return !isNaN(Number(value));
+        })
+        .test('min', 'Peso ≥ 1kg', (value) => {
+            if (value === '' || value === null || value === undefined) return false;
+            return Number(value) >= 1;
+        })
+        .test('max', 'Peso ≤ 300kg', (value) => {
+            if (value === '' || value === null || value === undefined) return false;
+            return Number(value) <= 300;
+        })
         .required('El peso es requerido'),
     altura: yup
-        .number()
-        .typeError('Altura debe ser un número')
-        .min(30, 'Altura ≥ 30cm')
-        .max(250, 'Altura ≤ 250cm')
+        .mixed()
+        .test('is-number', 'Altura debe ser un número', (value) => {
+            if (value === '' || value === null || value === undefined) return false;
+            return !isNaN(Number(value));
+        })
+        .test('min', 'Altura ≥ 30cm', (value) => {
+            if (value === '' || value === null || value === undefined) return false;
+            return Number(value) >= 30;
+        })
+        .test('max', 'Altura ≤ 250cm', (value) => {
+            if (value === '' || value === null || value === undefined) return false;
+            return Number(value) <= 250;
+        })
         .required('La altura es requerida'),
-    brazos: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(200, '≤200cm').nullable(),
-    pantorrillas: yup
-        .number()
-        .typeError('Debe ser número')
-        .min(1, '≥1cm')
-        .max(200, '≤200cm')
-        .nullable(),
-    gluteo: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(200, '≤200cm').nullable(),
-    muslos: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(200, '≤200cm').nullable(),
-    pecho: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(200, '≤200cm').nullable(),
-    cintura: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(200, '≤200cm').nullable(),
-    cuello: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(100, '≤100cm').nullable(),
-    imc: yup.number().typeError('IMC debe ser un número').nullable(),
-    categoriaPeso: yup
-        .string().nullable()
+    brazos: yup.mixed().test('is-number-or-empty', 'Debe ser número', (value) => {
+        if (value === '' || value === null || value === undefined) return true;
+        return !isNaN(Number(value)) && Number(value) >= 1 && Number(value) <= 200;
+    }).nullable(),
+    pantorrillas: yup.mixed().test('is-number-or-empty', 'Debe ser número', (value) => {
+        if (value === '' || value === null || value === undefined) return true;
+        return !isNaN(Number(value)) && Number(value) >= 1 && Number(value) <= 200;
+    }).nullable(),
+    gluteo: yup.mixed().test('is-number-or-empty', 'Debe ser número', (value) => {
+        if (value === '' || value === null || value === undefined) return true;
+        return !isNaN(Number(value)) && Number(value) >= 1 && Number(value) <= 200;
+    }).nullable(),
+    muslos: yup.mixed().test('is-number-or-empty', 'Debe ser número', (value) => {
+        if (value === '' || value === null || value === undefined) return true;
+        return !isNaN(Number(value)) && Number(value) >= 1 && Number(value) <= 200;
+    }).nullable(),
+    pecho: yup.mixed().test('is-number-or-empty', 'Debe ser número', (value) => {
+        if (value === '' || value === null || value === undefined) return true;
+        return !isNaN(Number(value)) && Number(value) >= 1 && Number(value) <= 200;
+    }).nullable(),
+    cintura: yup.mixed().test('is-number-or-empty', 'Debe ser número', (value) => {
+        if (value === '' || value === null || value === undefined) return true;
+        return !isNaN(Number(value)) && Number(value) >= 1 && Number(value) <= 200;
+    }).nullable(),
+    cuello: yup.mixed().test('is-number-or-empty', 'Debe ser número', (value) => {
+        if (value === '' || value === null || value === undefined) return true;
+        return !isNaN(Number(value)) && Number(value) >= 1 && Number(value) <= 100;
+    }).nullable(),
+    imc: yup.mixed().nullable(),
+    categoriaPeso: yup.string().nullable()
 });
 
 export const Step3Schema = yup.object({
-    idPlan: yup.string().required('Debe seleccionar un plan'),
     fechaInicio: yup
         .string()
         .required('La fecha de inicio es requerida')
         .test('is-valid-date', 'La fecha no es válida', (val) => {
             return !!val && !isNaN(Date.parse(val));
-        })
-        .test('not-in-past', 'La fecha de inicio no puede ser anterior a hoy', (val) => {
+        }).test('not-in-past', 'La fecha de inicio no puede ser anterior a hoy', (val) => {
             if (!val) return false;
-            const fecha = new Date(val);
-            fecha.setHours(0, 0, 0, 0);
+            // Crear fecha a partir del string en formato YYYY-MM-DD
+            const [year, month, day] = val.split('-').map(Number);
+            const fechaSeleccionada = new Date(year, month - 1, day); // month es 0-indexed
+
+            // Obtener fecha actual sin hora
             const hoy = new Date();
-            hoy.setHours(0, 0, 0, 0);
-            return fecha >= hoy;
+            const fechaHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+
+            return fechaSeleccionada >= fechaHoy;
         }),
 });
 
+// Esquema completo combinado para svelte-forms-lib
+export const CompleteSchema = yup.object().shape({
+    ...Step1Schema.fields,
+    ...Step2Schema.fields,
+    ...Step3Schema.fields,
+});
+
 // Tipo combinado de datos del formulario
-export type ClienteFormData = yup.InferType<
-    typeof Step1Schema & typeof Step2Schema & typeof Step3Schema
->;
+export type ClienteFormData = yup.InferType<typeof CompleteSchema>;
 
 // Valores iniciales
 export const defaultClienteFormValues: ClienteFormData = {
@@ -96,8 +140,8 @@ export const defaultClienteFormValues: ClienteFormData = {
     correo: '',
     ocupacion: TipoOcupacion.ESTUDIANTE,
     puestoTrabajo: '',
-    peso: 0,
-    altura: 0,
+    peso: '' as any,
+    altura: '' as any,
     brazos: null,
     pantorrillas: null,
     gluteo: null,
