@@ -26,27 +26,81 @@
 	let showDeleteModal = false;
 	let tieneDeudaPendiente = false;
 
+	// Key para forzar re-render de componentes
+	let componentKey = 0;
+
 	// Reactive statements
 	$: clienteId = parseInt($page.params.id);
 	$: esNino = cliente?.ocupacion === TipoOcupacion.NINO;
 
+	// IMPORTANTE: Hacer que los tabs sean reactivos al cliente
+	$: tabs = cliente
+		? [
+				{
+					key: 'medidas',
+					label: 'Medidas',
+					component: MedidasHistoricas,
+					leftIcon: 'dashboard',
+					props: {
+						clienteId,
+						cliente,
+						onUpdate: reloadClienteData,
+						key: componentKey // Forzar re-render
+					}
+				},
+				{
+					key: 'pagos',
+					label: 'Historial de Pagos',
+					component: HistorialPagos,
+					leftIcon: 'dashboard',
+					props: {
+						clienteId,
+						cliente,
+						onUpdate: reloadClienteData,
+						key: componentKey // Forzar re-render
+					}
+				}
+			]
+		: [];
+
 	onMount(async () => {
+		// Verificar que tenemos un ID válido
+		if (isNaN(clienteId)) {
+			toasts.showToast('ID de cliente inválido', 'error');
+			goto('/clientes');
+			return;
+		}
+
 		await loadClienteData();
 		await checkDeudaPendiente();
 	});
 
 	// Cargar datos del cliente
 	async function loadClienteData() {
+		if (isNaN(clienteId)) return;
+
+		isLoading = true;
 		try {
-			cliente = await clienteService.getClienteById(clienteId);
+			const clienteData = await clienteService.getClienteById(clienteId);
+			if (clienteData) {
+				cliente = clienteData;
+			} else {
+				toasts.showToast('Cliente no encontrado', 'error');
+				goto('/clientes');
+			}
 		} catch (error) {
 			console.error('Error al cargar cliente:', error);
 			toasts.showToast('Error al cargar datos del cliente', 'error');
+			goto('/clientes');
+		} finally {
+			isLoading = false;
 		}
 	}
 
 	// Verificar si el cliente tiene deuda pendiente
 	async function checkDeudaPendiente() {
+		if (isNaN(clienteId)) return;
+
 		try {
 			const pagos = await pagoService.getPagosByCliente(clienteId);
 			tieneDeudaPendiente = pagos.some((pago) => pago.estado === 'Pendiente');
@@ -57,12 +111,16 @@
 
 	// Función para recargar datos del cliente
 	async function reloadClienteData() {
+		if (isNaN(clienteId)) return;
+
 		isLoading = true;
 		try {
 			const clienteActualizado = await clienteService.getClienteById(clienteId);
 			if (clienteActualizado) {
 				cliente = clienteActualizado;
 				await checkDeudaPendiente();
+				// Incrementar key para forzar re-render de componentes hijos
+				componentKey++;
 			}
 		} catch (error) {
 			console.error('Error al recargar datos:', error);
@@ -172,32 +230,6 @@
 		showMedidaModal = false;
 		reloadClienteData();
 	}
-
-	// Configuración de tabs
-	$: tabs = [
-		{
-			key: 'medidas',
-			label: 'Medidas',
-			component: MedidasHistoricas,
-			leftIcon: 'dashboard',
-			props: {
-				clienteId,
-				cliente,
-				onUpdate: reloadClienteData
-			}
-		},
-		{
-			key: 'pagos',
-			label: 'Historial de Pagos',
-			component: HistorialPagos,
-			leftIcon: 'dashboard',
-			props: {
-				clienteId,
-				cliente,
-				onUpdate: reloadClienteData
-			}
-		}
-	];
 </script>
 
 <DashboardLayout>
@@ -209,178 +241,192 @@
 					<Icon name="arrow-left" size={16} className="mr-2" />
 					Volver
 				</Button>
-				<h1 class="text-2xl font-bold text-[var(--letter)]">Ficha de cliente</h1>
+				<h1 class="text-2xl font-bold text-[var(--letter)]">
+					{isLoading ? 'Cargando...' : 'Ficha de cliente'}
+				</h1>
 			</div>
 		</div>
 
-		<!-- Panel de información personal -->
-		<Panel title="Información personal" variant="purple" titleIcon="people">
-			<svelte:fragment slot="header-actions">
-				<div class="flex items-center gap-2">
-					{#if tieneDeudaPendiente}
-						<Button variant="danger" size="sm" on:click={handleNuevoPago}>
-							<Icon name="warning" size={16} className="mr-2" />
-							Completar Pago
+		{#if isLoading}
+			<div class="flex h-64 items-center justify-center">
+				<div
+					class="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent"
+				></div>
+			</div>
+		{:else if cliente}
+			<!-- Panel de información personal -->
+			<Panel title="Información personal" variant="purple" titleIcon="people">
+				<svelte:fragment slot="header-actions">
+					<div class="flex items-center gap-2">
+						{#if tieneDeudaPendiente}
+							<Button variant="danger" size="sm" on:click={handleNuevoPago}>
+								<Icon name="warning" size={16} className="mr-2" />
+								Completar Pago
+							</Button>
+						{:else}
+							<Button variant="primary" size="sm" on:click={handleNuevoPago}>
+								<Icon name="plus" size={16} className="mr-2" />
+								Renovar Plan
+							</Button>
+						{/if}
+						<Button variant="outline" size="sm" on:click={handleEditCliente}>
+							<Icon name="edit" size={16} className="mr-2" />
+							Editar información
 						</Button>
-					{:else}
-						<Button variant="primary" size="sm" on:click={handleNuevoPago}>
-							<Icon name="plus" size={16} className="mr-2" />
-							Renovar Plan
+						<Button variant="danger" size="sm" on:click={handleDeleteCliente}>
+							<Icon name="trash" size={16} className="mr-2" />
+							Eliminar
 						</Button>
-					{/if}
-					<Button variant="outline" size="sm" on:click={handleEditCliente}>
-						<Icon name="edit" size={16} className="mr-2" />
-						Editar información
-					</Button>
-					<Button variant="danger" size="sm" on:click={handleDeleteCliente}>
-						<Icon name="trash" size={16} className="mr-2" />
-						Eliminar
-					</Button>
-				</div>
-			</svelte:fragment>
-
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<div>
-					<h3 class="text-lg font-bold">
-						{cliente?.apellido}
-						{cliente?.nombre} - {calcularEdad(cliente?.fechaNacimiento)} años
-					</h3>
-					<p class="text-gray-600">{cliente?.cedula}</p>
-				</div>
-
-				<div class="text-right">
-					<h3 class="font-bold">Membresía:</h3>
-					<p class={tieneDeudaPendiente ? 'font-medium text-red-600' : ''}>
-						{getMembresia()}
-						{#if tieneDeudaPendiente}⚠️ PAGO PENDIENTE{/if}
-					</p>
-				</div>
-
-				<div>
-					<h3 class="font-medium text-gray-600">Fecha de nacimiento:</h3>
-					<p>
-						{cliente?.fechaNacimiento ? formatDate(cliente.fechaNacimiento) : 'No registrada'}
-					</p>
-				</div>
-
-				<div>
-					<h3 class="font-medium text-gray-600">Número de celular:</h3>
-					<p>{cliente?.celular}</p>
-				</div>
-
-				<div>
-					<h3 class="font-medium text-gray-600">Dirección:</h3>
-					<p>{cliente?.direccion}</p>
-				</div>
-
-				<div>
-					<h3 class="font-medium text-gray-600">Lugar de residencia:</h3>
-					<p>{cliente?.ciudad} - {cliente?.pais}</p>
-				</div>
-
-				<div>
-					<h3 class="font-medium text-gray-600">Correo electrónico:</h3>
-					<p>{cliente?.correo}</p>
-				</div>
-
-				<div>
-					<h3 class="font-medium text-gray-600">Ocupación:</h3>
-					<p>
-						{cliente?.ocupacion}
-						{#if cliente?.puestoTrabajo}- {cliente.puestoTrabajo}{/if}
-					</p>
-				</div>
-
-				{#if cliente?.inscripciones && cliente.inscripciones.length > 0}
-					<div>
-						<h3 class="font-medium text-gray-600">Fecha de inicio:</h3>
-						<p>{formatDate(cliente.inscripciones[0].fechaInicio)}</p>
 					</div>
+				</svelte:fragment>
+
+				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 					<div>
-						<h3 class="font-medium text-gray-600">Fecha de fin:</h3>
+						<h3 class="text-lg font-bold">
+							{cliente.apellido}
+							{cliente.nombre} - {calcularEdad(cliente.fechaNacimiento)} años
+						</h3>
+						<p class="text-gray-600">{cliente.cedula}</p>
+					</div>
+
+					<div class="text-right">
+						<h3 class="font-bold">Membresía:</h3>
+						<p class={tieneDeudaPendiente ? 'font-medium text-red-600' : ''}>
+							{getMembresia()}
+							{#if tieneDeudaPendiente}⚠️ PAGO PENDIENTE{/if}
+						</p>
+					</div>
+
+					<div>
+						<h3 class="font-medium text-gray-600">Fecha de nacimiento:</h3>
 						<p>
-							{cliente.inscripciones[0].fechaFin
-								? formatDate(cliente.inscripciones[0].fechaFin)
-								: 'No definida'}
+							{cliente.fechaNacimiento ? formatDate(cliente.fechaNacimiento) : 'No registrada'}
 						</p>
 					</div>
-				{/if}
 
-				{#if tieneDeudaPendiente}
-					<div class="rounded-md border border-red-200 bg-red-50 p-3 md:col-span-2">
-						<p class="font-medium text-red-700">
-							⚠️ Este cliente tiene un pago pendiente. Complete el pago antes de realizar nuevas
-							acciones.
+					<div>
+						<h3 class="font-medium text-gray-600">Número de celular:</h3>
+						<p>{cliente.celular}</p>
+					</div>
+
+					<div>
+						<h3 class="font-medium text-gray-600">Dirección:</h3>
+						<p>{cliente.direccion}</p>
+					</div>
+
+					<div>
+						<h3 class="font-medium text-gray-600">Lugar de residencia:</h3>
+						<p>{cliente.ciudad} - {cliente.pais}</p>
+					</div>
+
+					<div>
+						<h3 class="font-medium text-gray-600">Correo electrónico:</h3>
+						<p>{cliente.correo}</p>
+					</div>
+
+					<div>
+						<h3 class="font-medium text-gray-600">Ocupación:</h3>
+						<p>
+							{cliente.ocupacion}
+							{#if cliente.puestoTrabajo}- {cliente.puestoTrabajo}{/if}
 						</p>
 					</div>
-				{/if}
-			</div>
-		</Panel>
 
-		<!-- Panel con tabs -->
-		<Panel {tabs} defaultActiveTab="medidas">
-			<svelte:fragment slot="tab-actions">
-				<Button variant="primary" size="sm" on:click={handleNuevaMedida}>
-					<Icon name="plus" size={16} className="mr-2" />
-					Nueva Medida
-				</Button>
+					{#if cliente.inscripciones && cliente.inscripciones.length > 0}
+						<div>
+							<h3 class="font-medium text-gray-600">Fecha de inicio:</h3>
+							<p>{formatDate(cliente.inscripciones[0].fechaInicio)}</p>
+						</div>
+						<div>
+							<h3 class="font-medium text-gray-600">Fecha de fin:</h3>
+							<p>
+								{cliente.inscripciones[0].fechaFin
+									? formatDate(cliente.inscripciones[0].fechaFin)
+									: 'No definida'}
+							</p>
+						</div>
+					{/if}
+
+					{#if tieneDeudaPendiente}
+						<div class="rounded-md border border-red-200 bg-red-50 p-3 md:col-span-2">
+							<p class="font-medium text-red-700">
+								⚠️ Este cliente tiene un pago pendiente. Complete el pago antes de realizar nuevas
+								acciones.
+							</p>
+						</div>
+					{/if}
+				</div>
+			</Panel>
+
+			<!-- Panel con tabs - Solo mostrar si hay tabs -->
+			{#if tabs.length > 0}
+				<Panel {tabs} defaultActiveTab="medidas">
+					<svelte:fragment slot="tab-actions">
+						<Button variant="primary" size="sm" on:click={handleNuevaMedida}>
+							<Icon name="plus" size={16} className="mr-2" />
+							Nueva Medida
+						</Button>
+					</svelte:fragment>
+				</Panel>
+			{/if}
+		{:else}
+			<div class="flex h-64 items-center justify-center text-gray-500">Cliente no encontrado</div>
+		{/if}
+
+		<!-- Modales -->
+		{#if showEditModal && cliente}
+			<EditarClienteModal
+				isOpen={showEditModal}
+				{cliente}
+				onClose={() => (showEditModal = false)}
+				onSuccess={handleEditSuccess}
+			/>
+		{/if}
+
+		{#if showPagoModal && cliente}
+			<NuevoPagoModal
+				isOpen={showPagoModal}
+				{cliente}
+				planActualId={getPlanActualId()}
+				isRenovacion={!tieneDeudaPendiente}
+				onClose={() => (showPagoModal = false)}
+				onSuccess={handlePagoSuccess}
+			/>
+		{/if}
+
+		{#if showMedidaModal && cliente}
+			<NuevaMedidaModal
+				isOpen={showMedidaModal}
+				{cliente}
+				onClose={() => (showMedidaModal = false)}
+				onSuccess={handleMedidaSuccess}
+			/>
+		{/if}
+
+		<!-- Modal de confirmación para eliminar -->
+		<BaseModal
+			isOpen={showDeleteModal}
+			onClose={() => (showDeleteModal = false)}
+			size="sm"
+			closeOnClickOutside
+		>
+			<svelte:fragment slot="header">
+				<h3 class="text-lg font-semibold">Confirmar eliminación</h3>
 			</svelte:fragment>
-		</Panel>
+
+			<div class="p-4 text-center">
+				<p>¿Estás seguro que deseas eliminar este cliente?</p>
+				<p class="mt-2 font-bold">
+					{cliente?.nombre}
+					{cliente?.apellido}
+				</p>
+				<p class="mt-1 text-sm text-gray-500">Esta acción no se puede deshacer.</p>
+			</div>
+
+			<svelte:fragment slot="footer">
+				<Button variant="outline" on:click={() => (showDeleteModal = false)}>Cancelar</Button>
+				<Button variant="danger" on:click={confirmDeleteCliente} {isLoading}>Eliminar</Button>
+			</svelte:fragment>
+		</BaseModal>
 	</div>
-
-	<!-- Modales -->
-	{#if showEditModal && cliente}
-		<EditarClienteModal
-			isOpen={showEditModal}
-			{cliente}
-			onClose={() => (showEditModal = false)}
-			onSuccess={handleEditSuccess}
-		/>
-	{/if}
-
-	{#if showPagoModal && cliente}
-		<NuevoPagoModal
-			isOpen={showPagoModal}
-			{cliente}
-			planActualId={getPlanActualId()}
-			isRenovacion={!tieneDeudaPendiente}
-			onClose={() => (showPagoModal = false)}
-			onSuccess={handlePagoSuccess}
-		/>
-	{/if}
-
-	{#if showMedidaModal && cliente}
-		<NuevaMedidaModal
-			isOpen={showMedidaModal}
-			{cliente}
-			onClose={() => (showMedidaModal = false)}
-			onSuccess={handleMedidaSuccess}
-		/>
-	{/if}
-
-	<!-- Modal de confirmación para eliminar -->
-	<BaseModal
-		isOpen={showDeleteModal}
-		onClose={() => (showDeleteModal = false)}
-		size="sm"
-		closeOnClickOutside
-	>
-		<svelte:fragment slot="header">
-			<h3 class="text-lg font-semibold">Confirmar eliminación</h3>
-		</svelte:fragment>
-
-		<div class="p-4 text-center">
-			<p>¿Estás seguro que deseas eliminar este cliente?</p>
-			<p class="mt-2 font-bold">
-				{cliente?.nombre}
-				{cliente?.apellido}
-			</p>
-			<p class="mt-1 text-sm text-gray-500">Esta acción no se puede deshacer.</p>
-		</div>
-
-		<svelte:fragment slot="footer">
-			<Button variant="outline" on:click={() => (showDeleteModal = false)}>Cancelar</Button>
-			<Button variant="danger" on:click={confirmDeleteCliente} {isLoading}>Eliminar</Button>
-		</svelte:fragment>
-	</BaseModal>
 </DashboardLayout>

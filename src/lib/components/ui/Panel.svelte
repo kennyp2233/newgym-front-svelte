@@ -12,7 +12,7 @@
 <script lang="ts">
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, afterUpdate } from 'svelte';
 
 	export let title: string = '';
 	export let className: string = '';
@@ -24,12 +24,30 @@
 	export let defaultActiveTab: string = '';
 
 	let activeTab: string = '';
+	let mounted = false;
+
+	// Reactivo: actualizar activeTab cuando cambien los tabs o defaultActiveTab
+	$: if (mounted && tabs.length > 0) {
+		// Si el tab activo no existe en los nuevos tabs, usar el defaultActiveTab o el primero
+		const tabExists = tabs.some((t) => t.key === activeTab);
+		if (!tabExists) {
+			activeTab = defaultActiveTab || tabs[0]?.key || '';
+		}
+	}
+
+	$: activeTabItem = tabs.find((t) => t.key === activeTab);
 
 	onMount(() => {
 		activeTab = defaultActiveTab || (tabs[0]?.key ?? '');
+		mounted = true;
 	});
 
-	$: activeTabItem = tabs.find((t) => t.key === activeTab);
+	afterUpdate(() => {
+		// Verificar que el tab activo sigue siendo válido después de updates
+		if (tabs.length > 0 && !tabs.some((t) => t.key === activeTab)) {
+			activeTab = defaultActiveTab || tabs[0]?.key || '';
+		}
+	});
 
 	function handleTabClick(tabKey: string) {
 		activeTab = tabKey;
@@ -57,7 +75,7 @@
 
 			{#if tabs.length > 0}
 				<div class="flex flex-wrap gap-2">
-					{#each tabs as tab}
+					{#each tabs as tab (tab.key)}
 						<Button
 							variant="ghost"
 							size="sm"
@@ -94,7 +112,9 @@
 
 			<!-- Contenido del tab activo -->
 			{#if activeTabItem?.component}
-				<svelte:component this={activeTabItem.component} {...activeTabItem.props || {}} />
+				{#key `${activeTabItem.key}-${activeTabItem.props?.key || 0}`}
+					<svelte:component this={activeTabItem.component} {...activeTabItem.props || {}} />
+				{/key}
 			{:else}
 				<!-- Slot content for active tab -->
 				<slot name="tab-content" {activeTab} />
