@@ -6,13 +6,13 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { toasts } from '$lib/stores/toastStore';
-	import { 
-		estadisticas, 
-		loading, 
-		error, 
-		resumenData, 
-		distribucionData, 
-		tendenciaData, 
+	import {
+		estadisticas,
+		loading,
+		error,
+		resumenData,
+		distribucionData,
+		tendenciaData,
 		actividadData,
 		anioSeleccionado,
 		mesSeleccionado,
@@ -52,7 +52,10 @@
 			}
 		} catch (error) {
 			console.error('Error al cargar dashboard:', error);
-			toasts.showToast('Error al cargar los datos del dashboard, mostrando datos de prueba', 'warning');
+			toasts.showToast(
+				'Error al cargar los datos del dashboard, mostrando datos de prueba',
+				'warning'
+			);
 		}
 	}
 
@@ -178,12 +181,7 @@
 		<h1 class="text-2xl font-bold text-[var(--letter)]">Dashboard de Contabilidad</h1>
 		<div class="flex gap-2">
 			{#if hasError}
-				<Button
-					variant="outline"
-					on:click={recargarDatos}
-					leftIcon="refresh"
-					size="sm"
-				>
+				<Button variant="outline" on:click={recargarDatos} leftIcon="refresh" size="sm">
 					Recargar
 				</Button>
 			{/if}
@@ -203,7 +201,9 @@
 	{#if isLoading && !$initialized}
 		<div class="flex items-center justify-center py-12">
 			<div class="text-center">
-				<div class="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent mx-auto"></div>
+				<div
+					class="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent"
+				></div>
 				<p class="text-lg font-medium text-[var(--letter)]">Cargando dashboard...</p>
 				<p class="text-sm text-gray-500">Esto puede tardar unos momentos</p>
 			</div>
@@ -212,11 +212,13 @@
 		<!-- Mostrar error si existe -->
 		{#if hasError}
 			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-center text-yellow-700">
-				<div class="flex items-center justify-center gap-2 mb-2">
+				<div class="mb-2 flex items-center justify-center gap-2">
 					<Icon name="warning" size={20} />
 					<p class="font-medium">Algunos datos no se pudieron cargar</p>
 				</div>
-				<p class="text-sm">Se están mostrando datos de ejemplo. Verifique la conexión con el servidor.</p>
+				<p class="text-sm">
+					Se están mostrando datos de ejemplo. Verifique la conexión con el servidor.
+				</p>
 			</div>
 		{/if}
 

@@ -19,7 +19,7 @@
 		'#5BAE73', // var(--success)
 		'#E7C46C', // var(--warning)
 		'#E07A7A', // var(--error)
-		'#AABBC4'  // var(--secondary)
+		'#AABBC4' // var(--secondary)
 	];
 
 	onMount(async () => {
@@ -40,10 +40,10 @@
 			// Importar ECharts dinámicamente
 			echartsLibrary = await import('echarts');
 			isChartReady = true;
-			
+
 			// Esperar el siguiente tick para asegurar que el DOM esté listo
 			await tick();
-			
+
 			// Crear gráfico si tenemos datos
 			if (data && data.length > 0) {
 				createChart();
@@ -95,7 +95,7 @@
 			},
 			tooltip: {
 				trigger: 'item',
-				formatter: function(params: any) {
+				formatter: function (params: any) {
 					return `${params.name}<br/>${params.value} clientes (${params.percent}%)`;
 				}
 			},
@@ -178,7 +178,9 @@
 			class="flex h-80 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--sections)] text-gray-500"
 		>
 			<div class="text-center">
-				<div class="mb-2 h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent mx-auto"></div>
+				<div
+					class="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent"
+				></div>
 				<p>Cargando datos...</p>
 			</div>
 		</div>
@@ -191,15 +193,13 @@
 	{:else}
 		<!-- Gráfico -->
 		<div class="rounded-lg border border-[var(--border)] bg-[var(--sections)] p-4">
-			<div
-				bind:this={chartContainer}
-				class="h-80 w-full"
-				style="min-height: 320px;"
-			>
+			<div bind:this={chartContainer} class="h-80 w-full" style="min-height: 320px;">
 				{#if !isChartReady}
 					<div class="flex h-full items-center justify-center text-gray-500">
 						<div class="text-center">
-							<div class="mb-2 h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent mx-auto"></div>
+							<div
+								class="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent"
+							></div>
 							<p>Inicializando gráfico...</p>
 						</div>
 					</div>
