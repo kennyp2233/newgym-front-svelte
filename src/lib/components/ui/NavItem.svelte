@@ -13,8 +13,8 @@
 <a
 	{href}
 	class={`flex items-center rounded-md px-4 py-2 transition-colors
-    ${isActive ? 'bg-opacity-10 bg-[var(--primary)] text-[var(--primary)]' : 'text-[var(--letter)]'}
-    hover:bg-opacity-10 hover:bg-[var(--primary)] hover:text-[var(--primary)]`}
+		${isActive ? 'bg-opacity-10 bg-[var(--primary)] text-white' : 'text-[var(--letter)]'}
+		hover:bg-opacity-10 hover:bg-[var(--primary)] hover:text-white`}
 	on:mouseenter={() => (hovered = true)}
 	on:mouseleave={() => (hovered = false)}
 >

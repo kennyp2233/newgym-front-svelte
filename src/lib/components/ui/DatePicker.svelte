@@ -61,6 +61,7 @@
 	<div class="relative">
 		<input
 			bind:this={inputElement}
+			{value}
 			{id}
 			{name}
 			{disabled}
