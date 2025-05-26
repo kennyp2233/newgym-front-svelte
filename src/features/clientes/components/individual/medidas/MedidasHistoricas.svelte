@@ -9,7 +9,7 @@
 	import { formatDate } from '$lib/utils';
 	import type { Cliente } from '../../../api';
 	import { TipoOcupacion } from '../../../api';
-	import EditarMedidaModal from './EditarMedidaModal.svelte';
+	import MedidaDetailModal from './MedidaDetailModal.svelte';
 
 	export let clienteId: number;
 	export let cliente: Cliente;
@@ -19,7 +19,7 @@
 	let medidas: Medida[] = [];
 	let isLoading = true;
 	let metricaSeleccionada = 'peso';
-	let showEditModal = false;
+	let showDetailModal = false;
 	let selectedMedida: Medida | null = null;
 
 	const esNino = cliente.ocupacion === TipoOcupacion.NINO;
@@ -153,28 +153,28 @@
 			key: 'acciones',
 			header: 'Acciones',
 			render: (value: any, medida: Medida) => `
-        <button class="btn-edit" data-id="${medida.idMedida}">
-          Editar
+        <button class="btn-view" data-id="${medida.idMedida}">
+          Ver
         </button>
       `
 		}
 	];
 
-	// Manejar clic en editar medida
+	// Manejar clic en ver medida
 	function handleTableClick(event: MouseEvent) {
 		const target = event.target as HTMLElement;
-		if (target.classList.contains('btn-edit')) {
+		if (target.classList.contains('btn-view')) {
 			const medidaId = parseInt(target.dataset.id || '');
 			const medida = medidas.find((m) => m.idMedida === medidaId);
 			if (medida) {
 				selectedMedida = medida;
-				showEditModal = true;
+				showDetailModal = true;
 			}
 		}
 	}
 
-	function handleEditSuccess() {
-		showEditModal = false;
+	function handleDetailSuccess() {
+		showDetailModal = false;
 		selectedMedida = null;
 		fetchMedidas();
 		onUpdate();
@@ -282,32 +282,33 @@
 	</div>
 </div>
 
-<!-- Modal para editar medida -->
-{#if showEditModal && selectedMedida}
-	<EditarMedidaModal
-		isOpen={showEditModal}
+<!-- Modal para ver/editar medida -->
+{#if showDetailModal && selectedMedida}
+	<MedidaDetailModal
+		isOpen={showDetailModal}
 		{cliente}
 		medida={selectedMedida}
 		onClose={() => {
-			showEditModal = false;
+			showDetailModal = false;
 			selectedMedida = null;
 		}}
-		onSuccess={handleEditSuccess}
+		onSuccess={handleDetailSuccess}
 	/>
 {/if}
 
 <style>
-	:global(.btn-edit) {
+	:global(.btn-view) {
 		cursor: pointer;
 		border-radius: 0.25rem;
-		background-color: #dbeafe;
+		background-color: #e0e7ff;
 		padding: 0.25rem 0.5rem;
 		font-size: 0.75rem;
-		color: #1e40af;
+		color: #3730a3;
 		transition: background-color 0.15s ease-in-out;
+		margin-right: 0.5rem;
 	}
 
-	:global(.btn-edit:hover) {
-		background-color: #bfdbfe;
+	:global(.btn-view:hover) {
+		background-color: #c7d2fe;
 	}
 </style>

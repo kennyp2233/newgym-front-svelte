@@ -16,7 +16,13 @@
 	$: alturaNumerico = data.altura ? parseFloat(data.altura) : 0;
 	$: imcData = calcularIMC(pesoNumerico, alturaNumerico);
 	$: imc = imcData ? `${imcData.imc} - ${imcData.categoria}` : 'Pendiente de cálculo';
-
+	$: if (imcData) {
+		data.imc = imcData.imc.toString();
+		data.categoriaPeso = imcData.categoria;
+	} else {
+		data.imc = '';
+		data.categoriaPeso = '';
+	}
 	function validateRange(value: string | number, min: number, max: number): boolean {
 		// Permitimos valores vacíos o nulos para que no bloquee formularios opcionales
 		if (value === null || value === undefined || value === '') return true;
@@ -56,6 +62,8 @@
 
 <div class="space-y-4">
 	<FormRow>
+		<input type="hidden" name="imc" bind:value={data.imc} />
+		<input type="hidden" name="categoriaPeso" bind:value={data.categoriaPeso} />
 		<div class="space-y-1.5">
 			<FormField
 				name="peso"

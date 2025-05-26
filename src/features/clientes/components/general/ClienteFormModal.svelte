@@ -62,7 +62,9 @@
 							muslos: vals.muslos ?? undefined,
 							pecho: vals.pecho ?? undefined,
 							cintura: vals.cintura ?? undefined,
-							cuello: vals.cuello ?? undefined
+							cuello: vals.cuello ?? undefined,
+							imc: vals.imc ?? undefined,
+							categoriaPeso: vals.categoriaPeso ?? undefined
 						},
 						inscripcion: {
 							idPlan: parseInt(vals.idPlan, 10),

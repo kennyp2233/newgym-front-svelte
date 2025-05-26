@@ -1,4 +1,3 @@
-<!-- src/lib/components/ui/forms/FormField.svelte -->
 <script lang="ts">
 	import Input from '../Input.svelte';
 	import NumberInput from '../NumberInput.svelte';
@@ -42,6 +41,12 @@
 			: String(fieldErrors)
 		: '';
 
+	// Determinar si el campo es requerido basado en si tiene errores de validación
+	$: isRequired =
+		Array.isArray(fieldErrors) && fieldErrors.length > 0
+			? fieldErrors.some((error) => typeof error === 'string' && error.includes('requerido'))
+			: typeof fieldErrors === 'string' && fieldErrors.includes('requerido');
+
 	// Función para manejar cambios - solo emite eventos, no modifica value directamente
 	function handleInput(event: Event) {
 		// Dejar que el binding natural de Svelte maneje la actualización
@@ -63,6 +68,7 @@
 		{helperText}
 		{size}
 		{disabled}
+		required={isRequired}
 		bind:value
 		on:change={handleChange}
 		on:blur
@@ -82,6 +88,7 @@
 		{max}
 		{size}
 		{disabled}
+		required={isRequired}
 		bind:value
 		on:input={handleInput}
 		on:change={handleChange}
@@ -101,6 +108,7 @@
 		{disabled}
 		{minDate}
 		{maxDate}
+		required={isRequired}
 		bind:value
 		on:input={handleInput}
 		on:change={handleChange}
@@ -121,6 +129,7 @@
 		{unit}
 		{size}
 		{disabled}
+		required={isRequired}
 		{...$$restProps}
 		bind:value
 		on:input={handleInput}

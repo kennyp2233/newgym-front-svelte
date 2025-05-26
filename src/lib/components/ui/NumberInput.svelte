@@ -17,6 +17,7 @@
 	export let max: number | undefined = undefined;
 	export let size: 'sm' | 'md' | 'lg' = 'md';
 	export let disabled = false;
+	export let required = false;
 
 	function handleKeyDown(e: KeyboardEvent) {
 		const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
@@ -54,6 +55,7 @@
 	{max}
 	{size}
 	{disabled}
+	{required}
 	bind:value
 	step={allowDecimals ? 0.01 : 1}
 	on:keydown={handleKeyDown}

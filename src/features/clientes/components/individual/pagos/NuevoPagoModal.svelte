@@ -1,4 +1,4 @@
-<!-- src/routes/clientes/[id]/NuevoPagoModal.svelte -->
+<!-- src/features/clientes/components/individual/pagos/NuevoPagoModal.svelte -->
 <script lang="ts">
 	import { createForm } from 'svelte-forms-lib';
 	import { onMount } from 'svelte';
@@ -23,28 +23,33 @@
 	let planSeleccionado: Plan | null = null;
 	let tieneDeudaActiva = false;
 	let isSubmitting = false;
+	let puedeRenovar = { puede: true, mensaje: '', diasRestantes: 0 as number | undefined } as { puede: boolean; mensaje: string; diasRestantes?: number | undefined };
 
-	// Esquema de validación
+	// Esquema de validación actualizado según documentación
 	const validationSchema = yup.object({
 		idPlan: yup.string().required('Debe seleccionar un plan'),
-		metodoPago: yup.string().required('Debe seleccionar un método de pago'),
+		metodoPago: yup.string().nullable(),
 		monto: yup
 			.number()
-			.required('El monto es requerido')
+			.nullable()
 			.min(1, 'El monto debe ser mayor a $1.00')
 			.test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
 				if (!value) return true;
 				const decimal = value.toString().split('.')[1];
 				return !decimal || decimal.length <= 2;
 			})
-			.test('max-amount', 'El monto no puede exceder el precio del plan', function (value) {
-				const { idPlan } = this.parent;
-				if (!value || !idPlan) return true;
-				const plan = planes.find((p) => p.idPlan === parseInt(idPlan));
-				const precioTotal = plan ? plan.precio + 10 : 0;
-				return value <= precioTotal;
-			}),
-		fechaInicio: yup.date().nullable(),
+			.test(
+				'max-amount',
+				'El monto no puede exceder el precio del plan + renovación',
+				function (value) {
+					const { idPlan } = this.parent;
+					if (!value || !idPlan) return true;
+					const plan = planes.find((p) => p.idPlan === parseInt(idPlan));
+					const precioTotal = plan ? plan.precio + 10 : 0; // +$10 renovación según documentación
+					return value <= precioTotal;
+				}
+			),
+		fechaInicio: yup.string().nullable(),
 		referencia: yup.string().nullable(),
 		observaciones: yup
 			.string()
@@ -64,6 +69,7 @@
 		},
 		validationSchema,
 		onSubmit: async (values) => {
+			// Verificar si tiene deuda activa
 			if (tieneDeudaActiva) {
 				toasts.showToast(
 					'No se puede registrar un nuevo pago mientras haya deuda pendiente. Complete el pago anterior primero.',
@@ -72,27 +78,44 @@
 				return;
 			}
 
+			// Verificar si puede renovar (solo para renovaciones)
+			if (isRenovacion && !puedeRenovar.puede) {
+				toasts.showToast(puedeRenovar.mensaje, 'error');
+				return;
+			}
+
 			isSubmitting = true;
 			try {
+				// Preparar datos según documentación API
 				const renovacionData: RenovacionPlanDTO = {
 					idCliente: cliente.idCliente,
 					idPlan: parseInt(values.idPlan),
-					metodoPago: values.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta',
+					metodoPago: (values.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta') || undefined,
 					monto: values.monto ? parseFloat(values.monto.toString()) : undefined,
 					fechaInicio: values.fechaInicio || undefined,
 					referencia: values.referencia || undefined,
 					observaciones: values.observaciones || undefined
 				};
 
-				await pagoService.renovarPlan(renovacionData);
-				toasts.showToast(
-					isRenovacion ? 'Plan renovado correctamente' : 'Pago registrado correctamente',
-					'success'
-				);
+				const response = await pagoService.renovarPlan(renovacionData);
+
+				// Mostrar mensaje de éxito según la documentación
+				if (response.datos.pago.estado === 'Completado') {
+					toasts.showToast(
+						isRenovacion ? 'Plan renovado correctamente' : 'Pago registrado correctamente',
+						'success'
+					);
+				} else {
+					toasts.showToast(
+						isRenovacion ? 'Renovación registrada con pago parcial' : 'Pago parcial registrado',
+						'info'
+					);
+				}
+
 				onSuccess();
 			} catch (error: any) {
 				console.error('Error al procesar pago:', error);
-				const errorMessage = error.response?.data?.message || 'Error al procesar pago';
+				const errorMessage = error.message || 'Error al procesar pago';
 				toasts.showToast(errorMessage, 'error');
 			} finally {
 				isSubmitting = false;
@@ -113,15 +136,19 @@
 			}
 
 			// Verificar si tiene deuda activa
-			const pagos = await pagoService.getPagosByCliente(cliente.idCliente);
-			tieneDeudaActiva = pagos.some((pago) => pago.estado === 'Pendiente');
+			tieneDeudaActiva = await pagoService.clienteTieneDeudaPendiente(cliente.idCliente);
+
+			// Verificar si puede renovar (solo para renovaciones)
+			if (isRenovacion) {
+				puedeRenovar = await pagoService.puedeRenovarPlan(cliente.idCliente);
+			}
 		} catch (error) {
 			console.error('Error al cargar datos:', error);
 			toasts.showToast('Error al cargar información', 'error');
 		}
 	});
 
-	// Calcular año de renovación
+	// Calcular año de renovación según documentación
 	function calcularAñoRenovacion(): number {
 		if (!cliente.inscripciones || cliente.inscripciones.length === 0) {
 			return new Date().getFullYear();
@@ -152,10 +179,10 @@
 		return fecha.toISOString().split('T')[0];
 	}
 
-	// Calcular precio total con renovación anual
+	// Calcular precio total con renovación anual según documentación
 	function getPrecioTotal(): number {
 		if (!planSeleccionado) return 10; // Solo renovación anual
-		return planSeleccionado.precio + 10; // Precio del plan + renovación anual
+		return planSeleccionado.precio + 10; // Precio del plan + renovación anual ($10)
 	}
 
 	$: añoRenovacion = calcularAñoRenovacion();
@@ -185,6 +212,18 @@
 				</p>
 			</div>
 		</div>
+	{:else if isRenovacion && !puedeRenovar.puede}
+		<div class="p-6 text-center">
+			<div class="mb-4 rounded-md border border-red-300 bg-red-100 p-4">
+				<h3 class="mb-2 font-bold text-red-800">❌ Renovación No Permitida</h3>
+				<p class="text-red-700">{puedeRenovar.mensaje}</p>
+				{#if puedeRenovar.diasRestantes && puedeRenovar.diasRestantes > 5}
+					<p class="mt-2 text-sm text-red-600">
+						Podrás renovar cuando falten 5 días o menos para el vencimiento.
+					</p>
+				{/if}
+			</div>
+		</div>
 	{:else}
 		<form on:submit={handleSubmit}>
 			<div class="space-y-4">
@@ -193,7 +232,7 @@
 					<strong>{cliente.nombre} {cliente.apellido}</strong>
 				</p>
 
-				<!-- Información de renovación anual -->
+				<!-- Información de renovación anual según documentación -->
 				<div class="rounded-md border border-blue-200 bg-blue-50 p-4">
 					<h4 class="mb-2 font-bold text-blue-800">💰 Renovación Anual {añoRenovacion}</h4>
 					<p class="text-sm text-blue-700">
@@ -201,6 +240,16 @@
 						mantenimiento de máquinas (año {añoRenovacion}).
 					</p>
 				</div>
+
+				{#if isRenovacion && puedeRenovar.diasRestantes !== undefined}
+					<div class="rounded-md border border-green-200 bg-green-50 p-4">
+						<h4 class="mb-2 font-bold text-green-800">✅ Renovación Permitida</h4>
+						<p class="text-sm text-green-700">
+							La membresía actual vence en <strong>{puedeRenovar.diasRestantes}</strong> días. Puedes
+							proceder con la renovación.
+						</p>
+					</div>
+				{/if}
 
 				<FormRow>
 					<FormField
@@ -213,7 +262,7 @@
 								value: plan.idPlan.toString(),
 								label: `${plan.nombre} (${plan.duracionMeses} ${
 									plan.duracionMeses === 1 ? 'mes' : 'meses'
-								}) - ${plan.precio.toFixed(2)}`
+								}) - $${plan.precio.toFixed(2)}`
 							}))
 						]}
 						bind:value={$form.idPlan}
@@ -222,10 +271,10 @@
 					/>
 					<FormField
 						name="metodoPago"
-						label="Método de pago"
+						label="Método de pago (Opcional)"
 						type="select"
 						options={[
-							{ value: '', label: 'Seleccionar método' },
+							{ value: '', label: 'No especificar' },
 							{ value: 'Efectivo', label: 'Efectivo' },
 							{ value: 'Transferencia', label: 'Transferencia' },
 							{ value: 'Tarjeta', label: 'Tarjeta de crédito/débito' }
@@ -239,11 +288,11 @@
 				<FormRow>
 					<FormField
 						name="monto"
-						label="Monto a pagar"
+						label="Monto a pagar (Opcional)"
 						type="number"
 						placeholder={precioTotal.toFixed(2)}
 						helperText={planSeleccionado
-							? `Plan: ${planSeleccionado.precio.toFixed(2)} + Renovación: $10.00 = Total: ${precioTotal.toFixed(2)}`
+							? `Plan: $${planSeleccionado.precio.toFixed(2)} + Renovación: $10.00 = Total: $${precioTotal.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`
 							: 'Seleccione un plan para ver el precio total'}
 						unit="$"
 						min={1}
@@ -255,7 +304,7 @@
 					/>
 					<FormField
 						name="fechaInicio"
-						label="Fecha de inicio"
+						label="Fecha de inicio (Opcional)"
 						type="date"
 						helperText="Si no se especifica, se usará la fecha actual"
 						bind:value={$form.fechaInicio}
@@ -280,7 +329,7 @@
 
 				<div class="w-full space-y-1.5">
 					<!-- svelte-ignore a11y_label_has_associated_control -->
-					<label class="text-md font-bold text-[var(--letter)]">Observaciones</label>
+					<label class="text-md font-bold text-[var(--letter)]">Observaciones (Opcional)</label>
 					<textarea
 						name="observaciones"
 						bind:value={$form.observaciones}
@@ -309,10 +358,15 @@
 								<p>Precio del plan: ${planSeleccionado.precio.toFixed(2)}</p>
 								<p>Renovación anual {añoRenovacion}: $10.00</p>
 								<p class="font-bold">Total: ${precioTotal.toFixed(2)}</p>
-								<p>Monto a pagar: ${$form.monto || '0.00'}</p>
-								{#if $form.monto && parseFloat($form.monto.toString()) < precioTotal}
+								<p>Monto a pagar: ${$form.monto || precioTotal.toFixed(2)}</p>
+								{#if !$form.monto}
+									<p class="text-xs text-blue-600">
+										(Se tomará el precio completo automáticamente)
+									</p>
+								{:else if parseFloat($form.monto.toString()) < precioTotal}
 									<p class="font-medium text-yellow-600">
 										Restante: ${(precioTotal - parseFloat($form.monto.toString())).toFixed(2)}
+										(Pago será marcado como Pendiente)
 									</p>
 								{/if}
 							</div>
@@ -328,7 +382,7 @@
 	{/if}
 
 	<svelte:fragment slot="footer">
-		{#if tieneDeudaActiva}
+		{#if tieneDeudaActiva || (isRenovacion && !puedeRenovar.puede)}
 			<Button variant="primary" on:click={onClose}>Entendido</Button>
 		{:else}
 			<Button variant="outline" on:click={onClose} type="button">Cancelar</Button>

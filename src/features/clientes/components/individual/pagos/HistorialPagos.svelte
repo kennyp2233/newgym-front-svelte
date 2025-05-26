@@ -1,4 +1,4 @@
-<!-- src/routes/clientes/[id]/HistorialPagos.svelte -->
+<!-- src/features/clientes/components/individual/pagos/HistorialPagos.svelte -->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Table from '$lib/components/ui/Table.svelte';
@@ -8,20 +8,28 @@
 	import { toasts } from '$lib/stores/toastStore';
 	import type { Cliente } from '../../../api';
 	import Icon from '$lib/components/ui/Icon.svelte';
+	import PagoDetailModal from './PagoDetailModal.svelte';
 
 	export let clienteId: number;
 	export let cliente: Cliente;
 	export let onUpdate: () => void = () => {};
+	export let key: number = 0; // Para forzar re-render desde el padre
 
 	let pagos: PagoDTO[] = [];
 	let isLoading = true;
 	let showCompleteModal = false;
+	let showDetailModal = false;
 	let selectedPago: PagoDTO | null = null;
 
 	// Cargar pagos del cliente
 	onMount(async () => {
 		await fetchPagos();
 	});
+
+	// Cargar pagos cuando cambie la key
+	$: if (clienteId && key !== undefined) {
+		fetchPagos();
+	}
 
 	async function fetchPagos() {
 		isLoading = true;
@@ -127,6 +135,13 @@
 		return precioTotal - pago.monto;
 	}
 
+	function handleDetailSuccess() {
+		showDetailModal = false;
+		selectedPago = null;
+		fetchPagos();
+		onUpdate();
+	}
+
 	// Calcular total de pagos
 	$: totalPagos = pagos.reduce((sum, pago) => sum + Number(pago.monto), 0);
 
@@ -175,27 +190,23 @@
 			render: (value: string) => value || '-'
 		},
 		{
-			key: 'observaciones',
-			header: 'Observaciones',
-			render: (value: string) => value || '-'
-		},
-		{
 			key: 'acciones',
 			header: 'Acciones',
 			render: (value: any, pago: PagoDTO) => {
+				let buttons = `<button class="btn-view" data-id="${pago.idPago}">Ver</button>`;
+				
 				if (pago.estado === 'Pendiente') {
-					return `
-            <button class="btn-complete" data-id="${pago.idPago}">
-              <span class="inline-flex items-center">
-                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                </svg>
-                Completar
-              </span>
-            </button>
-          `;
+					buttons += `<button class="btn-complete" data-id="${pago.idPago}">
+						<span class="inline-flex items-center">
+							<svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+								<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+							</svg>
+							Completar
+						</span>
+					</button>`;
 				}
-				return '<span class="text-xs text-gray-500">Completado</span>';
+				
+				return buttons;
 			}
 		}
 	];
@@ -203,12 +214,15 @@
 	// Manejar clic en la tabla
 	function handleTableClick(event: MouseEvent) {
 		const target = event.target as HTMLElement;
-		if (target.classList.contains('btn-complete') || target.closest('.btn-complete')) {
-			const button = target.classList.contains('btn-complete')
-				? target
-				: target.closest('.btn-complete');
-			const pagoId = parseInt((button as HTMLElement).dataset.id!);
-			const pago = pagos.find((p) => p.idPago === pagoId);
+		const pagoId = parseInt(target.dataset.id || (target.closest('[data-id]') as HTMLElement)?.dataset.id || '');
+		const pago = pagos.find((p) => p.idPago === pagoId);
+		
+		if (target.classList.contains('btn-view') || target.closest('.btn-view')) {
+			if (pago) {
+				selectedPago = pago;
+				showDetailModal = true;
+			}
+		} else if (target.classList.contains('btn-complete') || target.closest('.btn-complete')) {
 			if (pago) {
 				handleCompletePago(pago);
 			}
@@ -320,7 +334,36 @@
 	</BaseModal>
 {/if}
 
+<!-- Modal para ver/editar pago -->
+{#if showDetailModal && selectedPago}
+	<PagoDetailModal
+		isOpen={showDetailModal}
+		{cliente}
+		pago={selectedPago}
+		onClose={() => {
+			showDetailModal = false;
+			selectedPago = null;
+		}}
+		onSuccess={handleDetailSuccess}
+	/>
+{/if}
+
 <style>
+	:global(.btn-view) {
+		cursor: pointer;
+		border-radius: 0.25rem;
+		background-color: #e0e7ff;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.75rem;
+		color: #3730a3;
+		transition: background-color 0.15s ease-in-out;
+		margin-right: 0.5rem;
+	}
+
+	:global(.btn-view:hover) {
+		background-color: #c7d2fe;
+	}
+
 	:global(.btn-complete) {
 		display: inline-flex;
 		cursor: pointer;

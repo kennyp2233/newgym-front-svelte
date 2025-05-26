@@ -36,13 +36,13 @@ export const Step2Schema = yup.object({
         .typeError('Peso debe ser un número')
         .min(1, 'Peso ≥ 1kg')
         .max(300, 'Peso ≤ 300kg')
-        .nullable(),
+        .required('El peso es requerido'),
     altura: yup
         .number()
         .typeError('Altura debe ser un número')
         .min(30, 'Altura ≥ 30cm')
         .max(250, 'Altura ≤ 250cm')
-        .nullable(),
+        .required('La altura es requerida'),
     brazos: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(200, '≤200cm').nullable(),
     pantorrillas: yup
         .number()
@@ -55,6 +55,9 @@ export const Step2Schema = yup.object({
     pecho: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(200, '≤200cm').nullable(),
     cintura: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(200, '≤200cm').nullable(),
     cuello: yup.number().typeError('Debe ser número').min(1, '≥1cm').max(100, '≤100cm').nullable(),
+    imc: yup.number().typeError('IMC debe ser un número').nullable(),
+    categoriaPeso: yup
+        .string().nullable()
 });
 
 export const Step3Schema = yup.object({
@@ -93,8 +96,8 @@ export const defaultClienteFormValues: ClienteFormData = {
     correo: '',
     ocupacion: TipoOcupacion.ESTUDIANTE,
     puestoTrabajo: '',
-    peso: null,
-    altura: null,
+    peso: 0,
+    altura: 0,
     brazos: null,
     pantorrillas: null,
     gluteo: null,
@@ -102,6 +105,8 @@ export const defaultClienteFormValues: ClienteFormData = {
     pecho: null,
     cintura: null,
     cuello: null,
+    imc: null,
+    categoriaPeso: null,
     idPlan: '',
     fechaInicio: new Date().toISOString().split('T')[0],
 };

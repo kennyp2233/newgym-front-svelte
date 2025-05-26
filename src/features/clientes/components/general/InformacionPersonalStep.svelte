@@ -17,16 +17,16 @@
 		if (!planes || planes.length === 0) return [];
 
 		if (ocupacion === TipoOcupacion.NINO) {
-			return planes.filter((plan) => plan.tag === 'Niño');
+			return planes.filter((plan) => plan.tag === TipoOcupacion.NINO);
 		} else if (ocupacion === TipoOcupacion.ESTUDIANTE) {
-			return planes.filter((plan) => plan.tag === 'Estudiante');
+			return planes.filter((plan) => plan.tag === TipoOcupacion.ESTUDIANTE);
 		} else {
 			return planes.filter((plan) => plan.tag === 'Trabajo');
 		}
 	}
 
 	// Selección automática de plan cuando cambia ocupación
-	$: if (data.ocupacion && planesFiltrados.length > 0 && !data.idPlan) {
+	$: if (data.ocupacion) {
 		data.idPlan = planesFiltrados[0].idPlan.toString();
 	}
 

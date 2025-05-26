@@ -17,6 +17,7 @@
 	export let minDate: string | Date | null = null;
 	export let maxDate: string | Date | null = null;
 	export let disabled: boolean = false;
+	export let required: boolean = false;
 
 	let inputElement: HTMLInputElement;
 	let flatpickrInstance: flatpickr.Instance;
@@ -55,7 +56,10 @@
 
 <div class="w-full space-y-1.5">
 	{#if label}
-		<label for={id} class="text-md font-bold text-[var(--letter)]">{label}</label>
+		<label for={id} class="text-md font-bold text-[var(--letter)]">
+			{label}
+			{#if required}<span class="text-red-500">*</span>{/if}
+		</label>
 	{/if}
 
 	<div class="relative">
@@ -65,6 +69,7 @@
 			{id}
 			{name}
 			{disabled}
+			{required}
 			{placeholder}
 			class={`w-full rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 focus:ring-2 focus:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50
         ${size === 'sm' && 'h-8 text-sm'}

@@ -22,8 +22,8 @@
 	// Tabs
 	export let tabs: TabItem[] = [];
 	export let defaultActiveTab: string = '';
+	export let activeTab: string = ''; // Ahora se puede bindear desde el padre
 
-	let activeTab: string = '';
 	let mounted = false;
 
 	// Reactivo: actualizar activeTab cuando cambien los tabs o defaultActiveTab
@@ -38,7 +38,7 @@
 	$: activeTabItem = tabs.find((t) => t.key === activeTab);
 
 	onMount(() => {
-		activeTab = defaultActiveTab || (tabs[0]?.key ?? '');
+		activeTab = activeTab || defaultActiveTab || (tabs[0]?.key ?? ''); // Priorizar activeTab si viene del padre
 		mounted = true;
 	});
 
@@ -93,12 +93,9 @@
 				</div>
 			{/if}
 
-			<!-- Slot para acciones en cabecera - solo si no hay tabs -->
-			{#if tabs.length === 0}
-				<div class="ml-auto flex items-center gap-2">
-					<slot name="header-actions" />
-				</div>
-			{/if}
+			<div class="ml-auto flex items-center gap-2">
+				<slot name="header-actions" {activeTab} />
+			</div>
 		</div>
 	{/if}
 

@@ -79,7 +79,7 @@ export interface RenovacionResponse {
 }
 
 class PagoService {
-    // Renovar plan de un cliente
+    // Renovar plan de un cliente - ACTUALIZADO según documentación
     async renovarPlan(renovacionData: RenovacionPlanDTO): Promise<RenovacionResponse> {
         try {
             const response = await api.post('/pagos/renovar', renovacionData);
@@ -87,9 +87,18 @@ class PagoService {
         } catch (error: any) {
             console.error('Error al renovar plan:', error);
 
-            // Manejar errores específicos de renovación
+            // Manejar errores específicos de renovación según documentación
             if (error.response?.status === 403) {
                 throw new Error('No se puede renovar el plan. La inscripción actual debe estar próxima a vencer (5 días o menos).');
+            }
+
+            // Manejar otros errores específicos
+            if (error.response?.status === 404) {
+                throw new Error('Cliente no encontrado');
+            }
+
+            if (error.response?.status === 400) {
+                throw new Error(error.response?.data?.message || 'Datos de renovación inválidos');
             }
 
             throw error;
@@ -140,13 +149,23 @@ class PagoService {
         }
     }
 
-    // Actualizar un pago existente (para completar pago parcial)
+    // Actualizar un pago existente (para completar pago parcial) - ACTUALIZADO según documentación
     async updatePago(id: number, pagoData: Partial<PagoDTO>): Promise<PagoDTO | null> {
         try {
             const response = await api.patch(`/pagos/${id}`, pagoData);
             return response.data;
-        } catch (error) {
+        } catch (error: any) {
             console.error(`Error al actualizar pago con ID ${id}:`, error);
+
+            // Manejar errores específicos
+            if (error.response?.status === 404) {
+                throw new Error('Pago no encontrado');
+            }
+
+            if (error.response?.status === 400) {
+                throw new Error(error.response?.data?.message || 'Datos de pago inválidos');
+            }
+
             throw error;
         }
     }
@@ -156,8 +175,18 @@ class PagoService {
         try {
             await api.delete(`/pagos/${id}`);
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error(`Error al eliminar pago con ID ${id}:`, error);
+
+            // Manejar errores específicos
+            if (error.response?.status === 404) {
+                throw new Error('Pago no encontrado');
+            }
+
+            if (error.response?.status === 403) {
+                throw new Error('No se puede eliminar este pago');
+            }
+
             return false;
         }
     }
@@ -205,13 +234,68 @@ class PagoService {
         }
     }
 
-    // Calcular monto restante de un pago
+    // Calcular monto restante de un pago - ACTUALIZADO según documentación
     calcularMontoRestante(pago: PagoDTO): number {
         if (!pago.inscripcion?.plan) return 0;
 
-        // Precio del plan + $10 renovación anual
+        // Precio del plan + $10 renovación anual (según documentación)
         const precioTotal = pago.inscripcion.plan.precio + 10;
         return Math.max(0, precioTotal - pago.monto);
+    }
+
+    // Obtener pagos pendientes de un cliente
+    async getPagosPendientes(idCliente: number): Promise<PagoDTO[]> {
+        try {
+            const pagos = await this.getPagosByCliente(idCliente);
+            return pagos.filter(pago => pago.estado === 'Pendiente');
+        } catch (error) {
+            console.error('Error al obtener pagos pendientes:', error);
+            return [];
+        }
+    }
+
+    // Verificar si se puede renovar un plan (debe estar próximo a vencer)
+    async puedeRenovarPlan(idCliente: number): Promise<{ puede: boolean; mensaje: string; diasRestantes?: number }> {
+        try {
+            // Esta lógica debería estar en el backend, pero podemos hacer una verificación previa
+            const response = await api.get(`/clientes/${idCliente}`);
+            const cliente = response.data;
+
+            if (!cliente.inscripciones || cliente.inscripciones.length === 0) {
+                return { puede: false, mensaje: 'El cliente no tiene inscripciones activas' };
+            }
+
+            // Obtener la inscripción más reciente
+            const inscripcionActiva = cliente.inscripciones.sort(
+                (a: any, b: any) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()
+            )[0];
+
+            if (!inscripcionActiva.fechaFin) {
+                return { puede: false, mensaje: 'La inscripción no tiene fecha de fin definida' };
+            }
+
+            const fechaFin = new Date(inscripcionActiva.fechaFin);
+            const hoy = new Date();
+            const diffTime = fechaFin.getTime() - hoy.getTime();
+            const diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diasRestantes > 5) {
+                return {
+                    puede: false,
+                    mensaje: `La inscripción vence en ${diasRestantes} días. Solo se puede renovar cuando falten 5 días o menos.`,
+                    diasRestantes
+                };
+            }
+
+            return {
+                puede: true,
+                mensaje: 'El plan puede ser renovado',
+                diasRestantes
+            };
+        } catch (error) {
+            console.error('Error al verificar renovación:', error);
+            return { puede: false, mensaje: 'Error al verificar el estado de la inscripción' };
+        }
     }
 }
 

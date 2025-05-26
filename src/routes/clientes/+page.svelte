@@ -161,15 +161,15 @@
 			puestoTrabajo: cliente.puestoTrabajo || '',
 			idPlan: inscripcionActual?.idPlan?.toString() || '',
 			fechaInicio: inscripcionActual?.fechaInicio || new Date().toISOString().split('T')[0],
-			peso: ultimaMedida?.peso?.toString() || '',
-			altura: ultimaMedida?.altura?.toString() || '',
-			brazos: ultimaMedida?.brazos?.toString() || '',
-			pantorrillas: ultimaMedida?.pantorrillas?.toString() || '',
-			gluteo: ultimaMedida?.gluteo?.toString() || '',
-			muslos: ultimaMedida?.muslos?.toString() || '',
-			pecho: ultimaMedida?.pecho?.toString() || '',
-			cintura: ultimaMedida?.cintura?.toString() || '',
-			cuello: ultimaMedida?.cuello?.toString() || ''
+			peso: ultimaMedida?.peso || 0,
+			altura: ultimaMedida?.altura || 0,
+			brazos: ultimaMedida?.brazos || 0,
+			pantorrillas: ultimaMedida?.pantorrillas || 0,
+			gluteo: ultimaMedida?.gluteo || 0,
+			muslos: ultimaMedida?.muslos || 0,
+			pecho: ultimaMedida?.pecho || 0,
+			cintura: ultimaMedida?.cintura || 0,
+			cuello: ultimaMedida?.cuello || 0
 		};
 
 		isEditing = true;
@@ -258,7 +258,6 @@
 		}}
 		onSubmit={handleClienteSubmit}
 		{clienteToEdit}
-		{isEditing}
 	/>
 
 	<!-- Modal de confirmación para eliminar cliente -->
