@@ -4,63 +4,31 @@
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
 	import { calcularIMC } from '$lib/utils';
 	import { TipoOcupacion } from '../../api';
-	import { createEventDispatcher } from 'svelte';
 
-	export let formData: any;
+	export let data: any;
 	export let errors: any;
 	export let touched: any;
 
-	const dispatch = createEventDispatcher();
-
-	$: isNino = formData.ocupacion === TipoOcupacion.NINO;
+	$: isNino = data.ocupacion === TipoOcupacion.NINO;
 
 	// Convertir strings a números para el cálculo del IMC
-	$: pesoNumerico = formData.peso ? parseFloat(formData.peso) : 0;
-	$: alturaNumerico = formData.altura ? parseFloat(formData.altura) : 0;
+	$: pesoNumerico = data.peso ? parseFloat(data.peso) : 0;
+	$: alturaNumerico = data.altura ? parseFloat(data.altura) : 0;
 	$: imcData = calcularIMC(pesoNumerico, alturaNumerico);
 	$: imc = imcData ? `${imcData.imc} - ${imcData.categoria}` : 'Pendiente de cálculo';
 
-	function handleFieldChange(field: string) {
-		return (e: Event) => {
-			const target = e.target as HTMLInputElement;
-			// Para campos numéricos, mantener como string pero validar que sea numérico
-			let value = target.value;
-
-			// Validación básica en tiempo real para campos numéricos
-			if (
-				[
-					'peso',
-					'altura',
-					'brazos',
-					'pantorrillas',
-					'gluteo',
-					'muslos',
-					'pecho',
-					'cintura',
-					'cuello'
-				].includes(field)
-			) {
-				// Permitir valores vacíos, números enteros y decimales
-				if (value !== '' && !/^\d*\.?\d*$/.test(value)) {
-					// Si no es un número válido, no actualizar
-					return;
-				}
-			}
-
-			dispatch('updateField', { field, value });
-		};
+	function validateRange(value: string | number, min: number, max: number): boolean {
+		// Permitimos valores vacíos o nulos para que no bloquee formularios opcionales
+		if (value === null || value === undefined || value === '') return true;
+		// Coerción a número
+		const num = typeof value === 'number' ? value : parseFloat(String(value));
+		if (isNaN(num)) return false;
+		return num >= min && num <= max;
 	}
-
-	// Helper para validar rango de medidas en tiempo real
-	function validateRange(value: string, min: number, max: number): boolean {
-		if (!value || value.trim() === '') return true;
-		const num = parseFloat(value);
-		return !isNaN(num) && num >= min && num <= max;
-	}
-
 	// Determinar si mostrar advertencia de rango
-	function getRangeWarning(field: string, value: string): string {
-		if (!value || value.trim() === '') return '';
+	function getRangeWarning(field: string, value: string | number): string {
+		if (value === null || value === undefined || value === '') return '';
+		const num = typeof value === 'number' ? value : parseFloat(String(value));
 
 		const ranges: Record<string, { min: number; max: number; unit: string }> = {
 			peso: { min: 1, max: 300, unit: 'kg' },
@@ -77,7 +45,8 @@
 		const range = ranges[field];
 		if (!range) return '';
 
-		if (!validateRange(value, range.min, range.max)) {
+		// Si no es un número o está fuera de rango, retornamos la advertencia
+		if (isNaN(num) || num < range.min || num > range.max) {
 			return `Debe estar entre ${range.min} y ${range.max} ${range.unit}`;
 		}
 
@@ -96,13 +65,12 @@
 				type="number"
 				min={1}
 				max={300}
-				value={formData.peso || ''}
+				bind:value={data.peso}
 				{errors}
 				{touched}
-				on:input={handleFieldChange('peso')}
 			/>
-			{#if formData.peso && !validateRange(formData.peso, 1, 300)}
-				<p class="text-sm text-amber-600">⚠️ {getRangeWarning('peso', formData.peso)}</p>
+			{#if data.peso && !validateRange(data.peso, 1, 300)}
+				<p class="text-sm text-amber-600">⚠️ {getRangeWarning('peso', data.peso)}</p>
 			{/if}
 		</div>
 
@@ -115,13 +83,12 @@
 				type="number"
 				min={30}
 				max={250}
-				value={formData.altura || ''}
+				bind:value={data.altura}
 				{errors}
 				{touched}
-				on:input={handleFieldChange('altura')}
 			/>
-			{#if formData.altura && !validateRange(formData.altura, 30, 250)}
-				<p class="text-sm text-amber-600">⚠️ {getRangeWarning('altura', formData.altura)}</p>
+			{#if data.altura && !validateRange(data.altura, 30, 250)}
+				<p class="text-sm text-amber-600">⚠️ {getRangeWarning('altura', data.altura)}</p>
 			{/if}
 		</div>
 	</FormRow>
@@ -136,10 +103,9 @@
 				type="number"
 				min={1}
 				max={200}
-				value={formData.brazos || ''}
+				bind:value={data.brazos}
 				{errors}
 				{touched}
-				on:input={handleFieldChange('brazos')}
 			/>
 			<FormField
 				name="pantorrillas"
@@ -149,10 +115,9 @@
 				type="number"
 				min={1}
 				max={200}
-				value={formData.pantorrillas || ''}
+				bind:value={data.pantorrillas}
 				{errors}
 				{touched}
-				on:input={handleFieldChange('pantorrillas')}
 			/>
 		</FormRow>
 
@@ -165,10 +130,9 @@
 				type="number"
 				min={1}
 				max={200}
-				value={formData.gluteo || ''}
+				bind:value={data.gluteo}
 				{errors}
 				{touched}
-				on:input={handleFieldChange('gluteo')}
 			/>
 			<FormField
 				name="muslos"
@@ -178,10 +142,9 @@
 				type="number"
 				min={1}
 				max={200}
-				value={formData.muslos || ''}
+				bind:value={data.muslos}
 				{errors}
 				{touched}
-				on:input={handleFieldChange('muslos')}
 			/>
 		</FormRow>
 
@@ -194,10 +157,9 @@
 				type="number"
 				min={1}
 				max={200}
-				value={formData.pecho || ''}
+				bind:value={data.pecho}
 				{errors}
 				{touched}
-				on:input={handleFieldChange('pecho')}
 			/>
 			<FormField
 				name="cintura"
@@ -207,10 +169,9 @@
 				type="number"
 				min={1}
 				max={200}
-				value={formData.cintura || ''}
+				bind:value={data.cintura}
 				{errors}
 				{touched}
-				on:input={handleFieldChange('cintura')}
 			/>
 		</FormRow>
 
@@ -223,13 +184,11 @@
 				type="number"
 				min={1}
 				max={100}
-				value={formData.cuello || ''}
+				bind:value={data.cuello}
 				{errors}
 				{touched}
-				on:input={handleFieldChange('cuello')}
 			/>
 			<div></div>
-			<!-- Espacio vacío para mantener la estructura de 2 columnas -->
 		</FormRow>
 	{/if}
 

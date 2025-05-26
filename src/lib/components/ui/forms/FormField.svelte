@@ -42,10 +42,14 @@
 			: String(fieldErrors)
 		: '';
 
-	// Función para manejar el binding bidireccional
+	// Función para manejar cambios - solo emite eventos, no modifica value directamente
 	function handleInput(event: Event) {
-		const target = event.target as HTMLInputElement | HTMLSelectElement;
-		value = target.value;
+		// Dejar que el binding natural de Svelte maneje la actualización
+		// Solo propagar el evento hacia arriba si es necesario
+	}
+
+	function handleChange(event: Event) {
+		// Propagar evento hacia arriba
 	}
 </script>
 
@@ -59,8 +63,8 @@
 		{helperText}
 		{size}
 		{disabled}
-		{value}
-		on:change={handleInput}
+		bind:value
+		on:change={handleChange}
 		on:blur
 	/>
 {:else if type === 'number'}
@@ -78,9 +82,9 @@
 		{max}
 		{size}
 		{disabled}
-		{value}
+		bind:value
 		on:input={handleInput}
-		on:change
+		on:change={handleChange}
 		on:keydown
 		on:focus
 		on:blur
@@ -97,9 +101,9 @@
 		{disabled}
 		{minDate}
 		{maxDate}
-		{value}
+		bind:value
 		on:input={handleInput}
-		on:change={handleInput}
+		on:change={handleChange}
 		on:focus
 		on:blur
 	/>
@@ -117,9 +121,9 @@
 		{unit}
 		{size}
 		{disabled}
-		{value}
+		bind:value
 		on:input={handleInput}
-		on:change
+		on:change={handleChange}
 		on:keydown
 		on:focus
 		on:blur

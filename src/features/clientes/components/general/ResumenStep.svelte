@@ -4,27 +4,19 @@
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
 	import { calcularIMC } from '$lib/utils';
 	import { planService, type Plan } from '../../../planes/api';
-	import { createEventDispatcher } from 'svelte';
 
-	export let formData: any;
+	export let data: any;
 	export let errors: any;
 	export let touched: any;
 	export let planes: Plan[] = [];
 
-	const dispatch = createEventDispatcher();
-
-	$: planSeleccionado = planes.find((p) => p.idPlan === parseInt(formData.idPlan || '0'));
+	$: planSeleccionado = planes.find((p) => p.idPlan === parseInt(data.idPlan || '0'));
 	$: fechaFin =
-		planSeleccionado && formData.fechaInicio
-			? planService.calcularFechaFin(formData.fechaInicio, planSeleccionado.duracionMeses)
+		planSeleccionado && data.fechaInicio
+			? planService.calcularFechaFin(data.fechaInicio, planSeleccionado.duracionMeses)
 			: '';
-	$: imcData = calcularIMC(parseFloat(formData.peso || '0'), parseFloat(formData.altura || '0'));
+	$: imcData = calcularIMC(parseFloat(data.peso || '0'), parseFloat(data.altura || '0'));
 	$: imc = imcData ? `${imcData.imc} - ${imcData.categoria}` : 'Pendiente de cálculo';
-
-	function handleFechaInicioChange(e: Event) {
-		const target = e.target as HTMLInputElement;
-		dispatch('updateField', { field: 'fechaInicio', value: target.value });
-	}
 </script>
 
 <div class="space-y-4">
@@ -38,10 +30,9 @@
 			label="Fecha de inicio"
 			type="date"
 			minDate={new Date()}
-			bind:value={formData.fechaInicio}
+			bind:value={data.fechaInicio}
 			{errors}
 			{touched}
-			on:change={handleFechaInicioChange}
 		/>
 		<div class="w-full space-y-1.5">
 			<!-- svelte-ignore a11y_label_has_associated_control -->
@@ -60,7 +51,7 @@
 
 	<div class="space-y-2 rounded-md border bg-[var(--sections)] p-3">
 		<p class="font-medium">Resumen</p>
-		<p>{formData.apellido} {formData.nombre} - {formData.cedula}</p>
+		<p>{data.apellido} {data.nombre} - {data.cedula}</p>
 		<p>
 			Plan: {planSeleccionado
 				? `${planSeleccionado.nombre} (${planSeleccionado.duracionMeses} ${planSeleccionado.duracionMeses === 1 ? 'mes' : 'meses'})`

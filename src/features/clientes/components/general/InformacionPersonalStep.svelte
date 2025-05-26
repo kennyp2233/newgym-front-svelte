@@ -4,17 +4,14 @@
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
 	import { TipoOcupacion } from '../../api';
 	import type { Plan } from '../../../planes/api';
-	import { createEventDispatcher } from 'svelte';
 
-	export let formData: any;
+	export let data: any;
 	export let errors: any;
 	export let touched: any;
 	export let planes: Plan[] = [];
 
-	const dispatch = createEventDispatcher();
-
 	// Filtrar planes según ocupación
-	$: planesFiltrados = filterPlanesPorOcupacion(formData.ocupacion || TipoOcupacion.ESTUDIANTE);
+	$: planesFiltrados = filterPlanesPorOcupacion(data.ocupacion || TipoOcupacion.ESTUDIANTE);
 
 	function filterPlanesPorOcupacion(ocupacion: string) {
 		if (!planes || planes.length === 0) return [];
@@ -28,22 +25,14 @@
 		}
 	}
 
-	function handleOcupacionChange(e: Event) {
-		const target = e.target as HTMLSelectElement;
-		const nuevaOcupacion = target.value;
-
-		// Emitir cambio de ocupación
-		dispatch('updateField', { field: 'ocupacion', value: nuevaOcupacion });
-
-		// La selección automática del plan se maneja en el componente padre
-		// para mantener la lógica centralizada
+	// Selección automática de plan cuando cambia ocupación
+	$: if (data.ocupacion && planesFiltrados.length > 0 && !data.idPlan) {
+		data.idPlan = planesFiltrados[0].idPlan.toString();
 	}
 
-	function handleFieldChange(field: string) {
-		return (e: Event) => {
-			const target = e.target as HTMLInputElement | HTMLSelectElement;
-			dispatch('updateField', { field, value: target.value });
-		};
+	// Limpiar puesto de trabajo si no es ocupación de trabajo
+	$: if (data.ocupacion && data.ocupacion !== TipoOcupacion.TRABAJO) {
+		data.puestoTrabajo = '';
 	}
 
 	function calcularEdad(fecha: string): number {
@@ -58,13 +47,12 @@
 		return edad;
 	}
 
-	// Helper para obtener el mensaje de ayuda del plan
 	function getPlanHelperText(): string {
 		if (planesFiltrados.length === 0) {
 			return 'No hay planes disponibles para esta ocupación';
 		}
 
-		switch (formData.ocupacion) {
+		switch (data.ocupacion) {
 			case TipoOcupacion.NINO:
 				return 'Solo está disponible el Plan de Niño para esta ocupación';
 			case TipoOcupacion.ESTUDIANTE:
@@ -81,19 +69,17 @@
 			name="cedula"
 			label="Cédula"
 			placeholder="Ej: 0401010101"
-			value={formData.cedula || ''}
+			bind:value={data.cedula}
 			{errors}
 			{touched}
-			on:input={handleFieldChange('cedula')}
 		/>
 		<FormField
 			name="celular"
 			label="Celular"
 			placeholder="Ej: 0999999999"
-			value={formData.celular || ''}
+			bind:value={data.celular}
 			{errors}
 			{touched}
-			on:input={handleFieldChange('celular')}
 		/>
 	</FormRow>
 
@@ -102,19 +88,17 @@
 			name="nombre"
 			label="Nombres"
 			placeholder="Ej: Kevin Mateo"
-			value={formData.nombre || ''}
+			bind:value={data.nombre}
 			{errors}
 			{touched}
-			on:input={handleFieldChange('nombre')}
 		/>
 		<FormField
 			name="apellido"
 			label="Apellidos"
 			placeholder="Ej: Cano Cruceñira"
-			value={formData.apellido || ''}
+			bind:value={data.apellido}
 			{errors}
 			{touched}
-			on:input={handleFieldChange('apellido')}
 		/>
 	</FormRow>
 
@@ -123,19 +107,17 @@
 			name="ciudad"
 			label="Ciudad"
 			placeholder="Ej: Tulcán"
-			value={formData.ciudad || ''}
+			bind:value={data.ciudad}
 			{errors}
 			{touched}
-			on:input={handleFieldChange('ciudad')}
 		/>
 		<FormField
 			name="pais"
 			label="País"
 			placeholder="Ej: Ecuador"
-			value={formData.pais || ''}
+			bind:value={data.pais}
 			{errors}
 			{touched}
-			on:input={handleFieldChange('pais')}
 		/>
 	</FormRow>
 
@@ -144,10 +126,9 @@
 			name="direccion"
 			label="Dirección"
 			placeholder="Ej: Calle 1, Casa 2"
-			value={formData.direccion || ''}
+			bind:value={data.direccion}
 			{errors}
 			{touched}
-			on:input={handleFieldChange('direccion')}
 		/>
 		<div class="space-y-1.5">
 			<FormField
@@ -155,14 +136,13 @@
 				label="Fecha de Nacimiento"
 				type="date"
 				maxDate={new Date()}
-				value={formData.fechaNacimiento || ''}
+				bind:value={data.fechaNacimiento}
 				{errors}
 				{touched}
-				on:change={handleFieldChange('fechaNacimiento')}
 			/>
-			{#if formData.fechaNacimiento}
+			{#if data.fechaNacimiento}
 				<p class="text-sm text-gray-500">
-					El cliente tiene {calcularEdad(formData.fechaNacimiento)} años
+					El cliente tiene {calcularEdad(data.fechaNacimiento)} años
 				</p>
 			{/if}
 		</div>
@@ -174,10 +154,9 @@
 			label="Correo Electrónico"
 			type="email"
 			placeholder="Ej: nombre@gmail.com"
-			value={formData.correo || ''}
+			bind:value={data.correo}
 			{errors}
 			{touched}
-			on:input={handleFieldChange('correo')}
 		/>
 		<FormField
 			name="ocupacion"
@@ -188,10 +167,9 @@
 				{ value: TipoOcupacion.ESTUDIANTE, label: 'Estudiante' },
 				{ value: TipoOcupacion.NINO, label: 'Niño' }
 			]}
-			value={formData.ocupacion || TipoOcupacion.ESTUDIANTE}
+			bind:value={data.ocupacion}
 			{errors}
 			{touched}
-			on:change={handleOcupacionChange}
 		/>
 	</FormRow>
 
@@ -207,24 +185,20 @@
 					label: `${plan.nombre} (${plan.duracionMeses} ${plan.duracionMeses === 1 ? 'mes' : 'meses'}) - $${plan.precio}`
 				}))
 			]}
-			value={formData.idPlan || ''}
+			bind:value={data.idPlan}
 			{errors}
 			{touched}
 			helperText={getPlanHelperText()}
-			on:change={handleFieldChange('idPlan')}
 		/>
 		<FormField
 			name="puestoTrabajo"
 			label="Puesto de trabajo"
 			placeholder="Ej: Albañil"
-			disabled={formData.ocupacion !== TipoOcupacion.TRABAJO}
-			value={formData.puestoTrabajo || ''}
+			disabled={data.ocupacion !== TipoOcupacion.TRABAJO}
+			bind:value={data.puestoTrabajo}
 			{errors}
 			{touched}
-			helperText={formData.ocupacion !== TipoOcupacion.TRABAJO
-				? 'No aplica para esta ocupación'
-				: ''}
-			on:input={handleFieldChange('puestoTrabajo')}
+			helperText={data.ocupacion !== TipoOcupacion.TRABAJO ? 'No aplica para esta ocupación' : ''}
 		/>
 	</FormRow>
 </div>

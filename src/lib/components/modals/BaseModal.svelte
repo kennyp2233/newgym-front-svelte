@@ -8,6 +8,14 @@
 	export let closeOnClickOutside: boolean = false;
 	export let closeOnEsc: boolean = true;
 
+	// Nuevas props
+	/** Si es true, envuelve body+footer en un <form> */
+	export let asForm: boolean = false;
+	/** Handler de submit */
+	export let onSubmit: (e: Event) => void = () => {};
+	/** Pasa novalidate al form si quieres desactivar validación nativa */
+	export let novalidate: boolean = false;
+
 	const sizeClasses = {
 		sm: 'max-w-md',
 		md: 'max-w-lg',
@@ -30,7 +38,6 @@
 		}
 	}
 
-	// Prevenir scroll y añadir listener de ESC
 	onMount(() => {
 		if (browser) {
 			originalOverflow = document.body.style.overflow;
@@ -46,11 +53,9 @@
 		}
 	});
 
-	// Vigilar cambios en isOpen
-	$: if (browser && isOpen) {
-		document.body.style.overflow = 'hidden';
-	} else if (browser) {
-		document.body.style.overflow = originalOverflow;
+	// Vigilar isOpen para scroll lock
+	$: if (browser) {
+		document.body.style.overflow = isOpen ? 'hidden' : originalOverflow;
 	}
 </script>
 
@@ -69,15 +74,27 @@
 				<slot name="header" />
 			</header>
 
-			<!-- Body -->
-			<div class="max-h-[calc(80vh-8rem)] overflow-y-auto bg-[var(--background)] p-4">
-				<slot />
-			</div>
-
-			<!-- Footer -->
-			<footer class="flex justify-center border-t border-[var(--border)] p-4">
-				<slot name="footer" />
-			</footer>
+			{#if asForm}
+				<!-- Si necesitamos formulario, envolvemos body+footer -->
+				<form class="flex flex-grow flex-col" on:submit|preventDefault={onSubmit} {novalidate}>
+					<!-- Body -->
+					<div class="max-h-[calc(80vh-8rem)] flex-grow overflow-y-auto bg-[var(--background)] p-4">
+						<slot />
+					</div>
+					<!-- Footer dentro del formulario -->
+					<footer class="flex justify-center border-t border-[var(--border)] p-4">
+						<slot name="footer" />
+					</footer>
+				</form>
+			{:else}
+				<!-- Modal “estático”: content + footer separados -->
+				<div class="max-h-[calc(80vh-8rem)] overflow-y-auto bg-[var(--background)] p-4">
+					<slot />
+				</div>
+				<footer class="flex justify-center border-t border-[var(--border)] p-4">
+					<slot name="footer" />
+				</footer>
+			{/if}
 		</div>
 	</div>
 {/if}
