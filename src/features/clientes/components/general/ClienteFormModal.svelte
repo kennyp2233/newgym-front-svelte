@@ -142,7 +142,6 @@
 		}
 	}
 
-	// Obtener los campos del paso actual
 	function getFieldsForCurrentStep(): string[] {
 		if (currentStep === 0) {
 			return [
@@ -170,12 +169,12 @@
 				'pecho',
 				'cintura',
 				'cuello'
-			]; // Added optional fields
+			];
 		} else {
-			return ['fechaInicio'];
+			// AGREGAMOS LOS NUEVOS CAMPOS DE PAGO AL STEP 3
+			return ['fechaInicio', 'monto', 'referencia', 'observaciones'];
 		}
 	}
-
 	async function submitFormLogic(formData: ClienteFormData) {
 		isSubmitting = true;
 		try {
@@ -209,15 +208,22 @@
 					pecho: formData.pecho ? Number(formData.pecho) : undefined,
 					cintura: formData.cintura ? Number(formData.cintura) : undefined,
 					cuello: formData.cuello ? Number(formData.cuello) : undefined,
-					imc: formData.imc ? Number(formData.imc) : undefined, // IMC is calculated, ensure it's passed if needed
-					categoriaPeso: formData.categoriaPeso ? String(formData.categoriaPeso) : undefined // Same for categoriaPeso
+					imc: formData.imc ? Number(formData.imc) : undefined,
+					categoriaPeso: formData.categoriaPeso ? String(formData.categoriaPeso) : undefined
 				},
 				inscripcion: {
 					idPlan: parseInt(formData.idPlan as string, 10),
 					fechaInicio: formData.fechaInicio as string,
 					fechaFin: planService.calcularFechaFin(formData.fechaInicio as string, duracionMeses)
+				},
+				// AGREGAMOS EL OBJETO PAGO
+				pago: {
+					monto: formData.monto ? Number(formData.monto) : undefined,
+					referencia: formData.referencia ? String(formData.referencia) : undefined,
+					observaciones: formData.observaciones ? String(formData.observaciones) : undefined
 				}
 			};
+
 			await onSubmit(registro);
 			form.set(defaultClienteFormValues); // Reset form to default values
 			currentStep = 0;

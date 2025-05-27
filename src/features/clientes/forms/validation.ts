@@ -22,11 +22,12 @@ export const Step1Schema = yup.object({
     ocupacion: yup
         .mixed<TipoOcupacion>()
         .oneOf(Object.values(TipoOcupacion))
-        .required('La ocupación es requerida'), puestoTrabajo: yup.string().when('ocupacion', {
-            is: TipoOcupacion.TRABAJO,
-            then: (schema) => schema.required('El puesto de trabajo es requerido para trabajadores'),
-            otherwise: (schema) => schema.notRequired(),
-        }),
+        .required('La ocupación es requerida'),
+    puestoTrabajo: yup.string().when('ocupacion', {
+        is: TipoOcupacion.TRABAJO,
+        then: (schema) => schema.required('El puesto de trabajo es requerido para trabajadores'),
+        otherwise: (schema) => schema.notRequired(),
+    }),
     idPlan: yup.string()
         .required('Debe seleccionar un plan')
         .test('not-empty', 'Debe seleccionar un plan', (value) => {
@@ -97,6 +98,7 @@ export const Step2Schema = yup.object({
     categoriaPeso: yup.string().nullable()
 });
 
+// STEP 3 ACTUALIZADO CON CAMPOS DE PAGO
 export const Step3Schema = yup.object({
     fechaInicio: yup
         .string()
@@ -105,16 +107,29 @@ export const Step3Schema = yup.object({
             return !!val && !isNaN(Date.parse(val));
         }).test('not-in-past', 'La fecha de inicio no puede ser anterior a hoy', (val) => {
             if (!val) return false;
-            // Crear fecha a partir del string en formato YYYY-MM-DD
             const [year, month, day] = val.split('-').map(Number);
-            const fechaSeleccionada = new Date(year, month - 1, day); // month es 0-indexed
-
-            // Obtener fecha actual sin hora
+            const fechaSeleccionada = new Date(year, month - 1, day);
             const hoy = new Date();
             const fechaHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-
             return fechaSeleccionada >= fechaHoy;
         }),
+    monto: yup
+        .mixed()
+        .test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+            if (value === '' || value === null || value === undefined) return true;
+            return !isNaN(Number(value)) && Number(value) >= 0;
+        })
+        .test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
+            if (!value) return true;
+            const decimal = value.toString().split('.')[1];
+            return !decimal || decimal.length <= 2;
+        })
+        .nullable(),
+    referencia: yup.string().nullable(),
+    observaciones: yup
+        .string()
+        .max(150, 'Las observaciones no pueden exceder 150 caracteres')
+        .nullable()
 });
 
 // Esquema completo combinado para svelte-forms-lib
@@ -127,7 +142,7 @@ export const CompleteSchema = yup.object().shape({
 // Tipo combinado de datos del formulario
 export type ClienteFormData = yup.InferType<typeof CompleteSchema>;
 
-// Valores iniciales
+// VALORES INICIALES ACTUALIZADOS
 export const defaultClienteFormValues: ClienteFormData = {
     nombre: '',
     apellido: '',
@@ -153,4 +168,8 @@ export const defaultClienteFormValues: ClienteFormData = {
     categoriaPeso: null,
     idPlan: '',
     fechaInicio: new Date().toISOString().split('T')[0],
+    // NUEVOS CAMPOS DE PAGO
+    monto: null,
+    referencia: null,
+    observaciones: null,
 };

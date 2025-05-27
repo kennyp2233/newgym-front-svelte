@@ -60,6 +60,11 @@ export interface RegistroCompletoDTO {
     cliente: ClienteDTO;
     medidas: MedidaDTO; // Cambiado de medida a medidas para ajustarse al backend
     inscripcion: InscripcionDTO;
+    pago?: {
+        monto?: number;
+        referencia?: string;
+        observaciones?: string;
+    };
 }
 
 // Tipo para la estructura de un cliente (como se retornará del backend)
