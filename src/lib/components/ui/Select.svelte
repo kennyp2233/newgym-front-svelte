@@ -23,7 +23,8 @@
 		</label>
 	{/if}
 
-	<div class="relative">		<select
+	<div class="relative">
+		<select
 			id={inputId}
 			{name}
 			bind:value
@@ -34,6 +35,7 @@
         ${size === 'md' && 'h-10 text-base'}
         ${size === 'lg' && 'h-12 text-lg'}
         ${error && 'border-red-500 focus:ring-red-500'}`}
+			{...$$restProps}
 			on:change
 			on:blur
 			on:focus

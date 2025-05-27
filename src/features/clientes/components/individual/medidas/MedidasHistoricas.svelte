@@ -10,6 +10,7 @@
 	import type { Cliente } from '../../../api';
 	import { TipoOcupacion } from '../../../api';
 	import MedidaDetailModal from './MedidaDetailModal.svelte';
+	import type { TableAction } from '$lib/components/ui/Table.svelte';
 
 	export let clienteId: number;
 	export let cliente: Cliente;
@@ -103,6 +104,33 @@
 
 	$: metricaActual = metricas.find((m) => m.key === metricaSeleccionada);
 
+	// ✅ NUEVA FUNCIÓN PARA MANEJAR VER MEDIDA
+	function handleViewMedida(medida: Medida) {
+		selectedMedida = medida;
+		showDetailModal = true;
+	}
+
+	function handleDetailSuccess() {
+		showDetailModal = false;
+		selectedMedida = null;
+		fetchMedidas();
+		onUpdate();
+	}
+
+	function handleMetricChange(metricKey: string) {
+		metricaSeleccionada = metricKey;
+	}
+
+	// ✅ CONFIGURACIÓN DE ACCIONES PARA LA TABLA
+	$: tableActions = [
+		{
+			label: 'Ver',
+			icon: 'search',
+			variant: 'outline' as const,
+			onClick: handleViewMedida
+		}
+	] as TableAction<Medida>[];
+
 	// Configuración de columnas para la tabla
 	$: columns = [
 		{
@@ -148,41 +176,8 @@
 						header: 'Cintura (cm)',
 						render: (value: number) => Number(value)?.toFixed(1) || '-'
 					}
-				]),
-		{
-			key: 'acciones',
-			header: 'Acciones',
-			render: (value: any, medida: Medida) => `
-        <button class="btn-view" data-id="${medida.idMedida}">
-          Ver
-        </button>
-      `
-		}
+				])
 	];
-
-	// Manejar clic en ver medida
-	function handleTableClick(event: MouseEvent) {
-		const target = event.target as HTMLElement;
-		if (target.classList.contains('btn-view')) {
-			const medidaId = parseInt(target.dataset.id || '');
-			const medida = medidas.find((m) => m.idMedida === medidaId);
-			if (medida) {
-				selectedMedida = medida;
-				showDetailModal = true;
-			}
-		}
-	}
-
-	function handleDetailSuccess() {
-		showDetailModal = false;
-		selectedMedida = null;
-		fetchMedidas();
-		onUpdate();
-	}
-
-	function handleMetricChange(metricKey: string) {
-		metricaSeleccionada = metricKey;
-	}
 </script>
 
 <div class="space-y-6">
@@ -269,15 +264,16 @@
 	<div class="rounded-lg border border-[var(--border)] bg-white p-6 shadow-sm">
 		<h2 class="mb-4 text-xl font-bold text-[var(--letter)]">Historial de Medidas</h2>
 
+		<!-- ✅ TABLA CORREGIDA CON SISTEMA DE ACCIONES -->
 		<Table
 			data={medidas}
 			{columns}
+			actions={tableActions}
 			keyExtractor={(item) => item.idMedida.toString()}
 			{isLoading}
 			emptyStateMessage="No hay medidas registradas para este cliente"
 			rowClassName={() => 'bg-[var(--sections)] hover:bg-[var(--sections-hover)]'}
 			className="rounded-lg overflow-hidden"
-			on:click={handleTableClick}
 		/>
 	</div>
 </div>
@@ -295,20 +291,3 @@
 		onSuccess={handleDetailSuccess}
 	/>
 {/if}
-
-<style>
-	:global(.btn-view) {
-		cursor: pointer;
-		border-radius: 0.25rem;
-		background-color: #e0e7ff;
-		padding: 0.25rem 0.5rem;
-		font-size: 0.75rem;
-		color: #3730a3;
-		transition: background-color 0.15s ease-in-out;
-		margin-right: 0.5rem;
-	}
-
-	:global(.btn-view:hover) {
-		background-color: #c7d2fe;
-	}
-</style>

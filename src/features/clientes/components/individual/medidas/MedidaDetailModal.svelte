@@ -55,7 +55,7 @@
 		},
 		onSubmit: () => {} // Empty function since we handle submission manually
 	});
-					
+
 	const updateFieldWrapper = (field: string, value: any) => {
 		updateField(field as keyof typeof $form, value);
 		// Force reactivity by updating the form store directly
@@ -70,7 +70,7 @@
 			await validationSchema.validate($form, { abortEarly: false });
 			// Si la validación pasa, limpiar errores
 			const emptyErrors: Record<string, string> = {};
-			Object.keys($form).forEach(key => emptyErrors[key] = '');
+			Object.keys($form).forEach((key) => (emptyErrors[key] = ''));
 			errors.set(emptyErrors);
 			return true;
 		} catch (yupError: any) {
@@ -99,7 +99,7 @@
 	// Función de submit manual
 	async function handleSubmitForm() {
 		const isValid = await validateForm();
-		
+
 		if (!isValid) {
 			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
 			return;
@@ -205,10 +205,6 @@
 				<span class="text-sm text-gray-500">
 					{formatDate(medida.createdAt)}
 				</span>
-				<Button variant={isEditing ? 'outline' : 'ghost'} size="sm" on:click={toggleEdit}>
-					<Icon name={isEditing ? 'x' : 'edit'} size={16} className="mr-1" />
-					{isEditing ? 'Cancelar' : 'Editar'}
-				</Button>
 			</div>
 		</div>
 	</svelte:fragment>

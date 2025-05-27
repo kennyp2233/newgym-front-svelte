@@ -6,10 +6,20 @@
 		sortable?: boolean;
 		width?: string;
 	}
+
+	export interface TableAction<T> {
+		label: string;
+		icon?: string;
+		variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
+		onClick: (item: T) => void;
+		disabled?: (item: T) => boolean;
+		hidden?: (item: T) => boolean;
+	}
 </script>
 
 <script lang="ts">
 	import Button from '$lib/components/ui/Button.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { onMount } from 'svelte';
 	import { writable } from 'svelte/store';
 
@@ -35,7 +45,10 @@
 		onSort: (col: string, dir: 'asc' | 'desc') => void;
 	} | null = null;
 	export let rowClassName: (item: any, idx: number) => string = () => '';
-	export let actions: ((item: any) => any) | undefined = undefined;
+
+	// ✅ NUEVO: Sistema de acciones mejorado
+	export let actions: TableAction<any>[] = [];
+
 	export let selectable = false;
 	export let onSelectionChange: (selected: any[]) => void = () => {};
 
@@ -46,6 +59,7 @@
 		selected.set(new Set());
 		onSelectionChange?.([]);
 	}
+
 	function toggleRow(item: any, checked: boolean) {
 		if (!item) return; // Safety check
 		selected.update((s) => {
@@ -58,7 +72,7 @@
 	}
 
 	function toggleAll(checked: boolean) {
-		selected.set(checked ? new Set(data.filter(d => d).map((d) => keyExtractor(d))) : new Set());
+		selected.set(checked ? new Set(data.filter((d) => d).map((d) => keyExtractor(d))) : new Set());
 		onSelectionChange?.(checked ? [...data] : []);
 	}
 
@@ -77,6 +91,11 @@
 			if (p >= 1 && p <= last) arr.push(p);
 		}
 		return arr;
+	}
+
+	// ✅ NUEVO: Función para obtener acciones visibles
+	function getVisibleActions(item: any): TableAction<any>[] {
+		return actions.filter((action) => !action.hidden?.(item));
 	}
 </script>
 
@@ -128,12 +147,13 @@
 						</th>
 					{/each}
 
-					{#if actions}
-						<th class="border-b border-[var(--border)] p-3 text-right">Actions</th>
+					{#if actions.length > 0}
+						<th class="border-b border-[var(--border)] p-3 text-right">Acciones</th>
 					{/if}
 				</tr>
-			</thead>			<tbody>
-				{#each data.filter(item => item) as item, i (keyExtractor(item))}
+			</thead>
+			<tbody>
+				{#each data.filter((item) => item) as item, i (keyExtractor(item))}
 					<tr
 						class={`${isRowClickable ? 'cursor-pointer hover:bg-gray-50' : ''} ${rowClassName(item, i)}`}
 						on:click={() => onRowClick?.(item)}
@@ -162,9 +182,23 @@
 							</td>
 						{/each}
 
-						{#if actions}
+						{#if actions.length > 0}
 							<td class="border-b border-[var(--border)] p-3 text-right" on:click|stopPropagation>
-								<svelte:component this={actions(item)} />
+								<div class="flex items-center justify-end gap-2">
+									{#each getVisibleActions(item) as action}
+										<Button
+											variant={action.variant || 'outline'}
+											size="sm"
+											disabled={action.disabled?.(item) || false}
+											on:click={() => action.onClick(item)}
+										>
+											{#if action.icon}
+												<Icon name={action.icon} size={16} className="mr-1" />
+											{/if}
+											{action.label}
+										</Button>
+									{/each}
+								</div>
 							</td>
 						{/if}
 					</tr>

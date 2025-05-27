@@ -30,7 +30,7 @@
 			.string()
 			.max(150, 'Las observaciones no pueden exceder 150 caracteres')
 			.nullable()
-	});	// Configuración del formulario con valores iniciales del pago (sin validationSchema para manejar validación manual)
+	}); // Configuración del formulario con valores iniciales del pago (sin validationSchema para manejar validación manual)
 	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			monto: pago.monto.toString(),
@@ -56,7 +56,7 @@
 			await validationSchema.validate($form, { abortEarly: false });
 			// Si la validación pasa, limpiar errores
 			const emptyErrors: Record<string, string> = {};
-			Object.keys($form).forEach(key => emptyErrors[key] = '');
+			Object.keys($form).forEach((key) => (emptyErrors[key] = ''));
 			errors.set(emptyErrors);
 			return true;
 		} catch (yupError: any) {
@@ -85,7 +85,7 @@
 	// Función de submit manual
 	async function handleSubmitForm() {
 		const isValid = await validateForm();
-		
+
 		if (!isValid) {
 			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
 			return;
@@ -177,10 +177,7 @@
 				<span class="text-sm text-gray-500">
 					{formatDate(pago.fechaPago)}
 				</span>
-				<Button variant={isEditing ? 'outline' : 'ghost'} size="sm" on:click={toggleEdit}>
-					<Icon name={isEditing ? 'x' : 'edit'} size={16} className="mr-1" />
-					{isEditing ? 'Cancelar' : 'Editar'}
-				</Button>
+				
 			</div>
 		</div>
 	</svelte:fragment>
@@ -299,7 +296,7 @@
 							<div class="flex justify-between">
 								<span class="text-gray-600">Precio del plan:</span>
 								<span class="font-medium"
-									>${pago.inscripcion.plan?.precio?.toFixed(2) || '0.00'}</span
+									>${Number(pago.inscripcion.plan?.precio)?.toFixed(2) || '0.00'}</span
 								>
 							</div>
 							<div class="flex justify-between">
