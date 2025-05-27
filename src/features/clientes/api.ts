@@ -58,7 +58,7 @@ export interface InscripcionDTO {
 // DTO para registro completo
 export interface RegistroCompletoDTO {
     cliente: ClienteDTO;
-    medidas: MedidaDTO; // Cambiado de medida a medidas para ajustarse al backend
+    medidas: MedidaDTO;
     inscripcion: InscripcionDTO;
     pago?: {
         monto?: number;
@@ -155,13 +155,13 @@ class ClienteService {
         }
     }
 
-    // Registrar cliente completo (con medidas e inscripción)
+    // Registrar cliente completo (con medidas, inscripción y pago)
     async registrarCompleto(registroData: RegistroCompletoDTO): Promise<Cliente | null> {
         try {
             // Asegurarnos que los campos se ajustan al formato esperado por el backend
             const data = {
                 cliente: registroData.cliente,
-                medidas: registroData.medidas, // Usar el nombre que espera el backend
+                medidas: registroData.medidas,
                 inscripcion: {
                     ...registroData.inscripcion,
                     // Asegurarnos que las fechas estén en formato Date para el backend
@@ -169,8 +169,16 @@ class ClienteService {
                     fechaFin: registroData.inscripcion.fechaFin
                         ? new Date(registroData.inscripcion.fechaFin)
                         : undefined
-                }
+                },
+                // ✅ CORREGIDO: Incluir los datos del pago
+                pago: registroData.pago ? {
+                    monto: registroData.pago.monto,
+                    referencia: registroData.pago.referencia,
+                    observaciones: registroData.pago.observaciones
+                } : undefined
             };
+
+            console.log('Enviando datos completos al backend:', data);
 
             const response = await api.post('/clientes/registro', data);
             return response.data;
