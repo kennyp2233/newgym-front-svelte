@@ -282,7 +282,7 @@
 			</div>
 		{:else if cliente}
 			<!-- Panel de información personal -->
-			<Panel title="Información personal" variant="purple" titleIcon="people">
+			<Panel title="Información personal" variant="clean" titleIcon="people">
 				<svelte:fragment slot="header-actions">
 					<div class="flex items-center gap-2">
 						<Button variant="outline" size="sm" on:click={handleEditCliente}>
@@ -296,87 +296,129 @@
 					</div>
 				</svelte:fragment>
 
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<div>
-						<h3 class="text-lg font-bold">
+				<div class="rounded-lg bg-white p-6 shadow-sm">
+					<!-- Header principal con nombre y cédula centrado -->
+					<div class="mb-8 text-center">
+						<h1 class="mb-2 text-2xl font-bold text-[var(--primary)]">
 							{cliente.apellido}
-							{cliente.nombre} - {calcularEdad(cliente.fechaNacimiento)} años
-						</h3>
-						<p class="text-gray-600">{cliente.cedula}</p>
-					</div>
-
-					<div class="text-right">
-						<h3 class="font-bold">Membresía:</h3>
-						<p class={tieneDeudaPendiente ? 'font-medium text-red-600' : ''}>
-							{getMembresia()}
-							{#if tieneDeudaPendiente}⚠️ PAGO PENDIENTE{/if}
+							{cliente.nombre}
+						</h1>
+						<p class="text-lg font-medium text-gray-700">
+							Cédula identidad No. {cliente.cedula}
 						</p>
 					</div>
 
-					<div>
-						<h3 class="font-medium text-gray-600">Fecha de nacimiento:</h3>
-						<p>
-							{cliente.fechaNacimiento ? formatDate(cliente.fechaNacimiento) : 'No registrada'}
-						</p>
-					</div>
+					<!-- Grid de información en 3 columnas como en la imagen -->
+					<div class="mx-auto grid max-w-4xl grid-cols-1 gap-x-12 gap-y-6 md:grid-cols-3">
+						<!-- Primera columna -->
+						<div class="space-y-6">
+							<div>
+								<p class="mb-1 text-sm font-medium text-gray-700">
+									<span class="font-bold">Edad:</span>
+									{calcularEdad(cliente.fechaNacimiento)} años
+								</p>
+							</div>
 
-					<div>
-						<h3 class="font-medium text-gray-600">Número de celular:</h3>
-						<p>{cliente.celular}</p>
-					</div>
-
-					<div>
-						<h3 class="font-medium text-gray-600">Dirección:</h3>
-						<p>{cliente.direccion}</p>
-					</div>
-
-					<div>
-						<h3 class="font-medium text-gray-600">Lugar de residencia:</h3>
-						<p>{cliente.ciudad} - {cliente.pais}</p>
-					</div>
-
-					<div>
-						<h3 class="font-medium text-gray-600">Correo electrónico:</h3>
-						<p>{cliente.correo}</p>
-					</div>
-
-					<div>
-						<h3 class="font-medium text-gray-600">Ocupación:</h3>
-						<p>
-							{cliente.ocupacion}
-							{#if cliente.puestoTrabajo}- {cliente.puestoTrabajo}{/if}
-						</p>
-					</div>
-
-					{#if cliente.inscripciones && cliente.inscripciones.length > 0}
-						<div>
-							<h3 class="font-medium text-gray-600">Fecha de inicio:</h3>
-							<p>{formatDate(cliente.inscripciones[0].fechaInicio)}</p>
+							<div>
+								<p class="mb-1 text-sm font-medium text-gray-700">
+									<span class="font-bold">Correo electrónico:</span>
+									{cliente.correo}
+								</p>
+							</div>
 						</div>
-						<div>
-							<h3 class="font-medium text-gray-600">Fecha de fin:</h3>
-							<p>
-								{cliente.inscripciones[0].fechaFin
-									? formatDate(cliente.inscripciones[0].fechaFin)
-									: 'No definida'}
-							</p>
+
+						<!-- Segunda columna -->
+						<div class="space-y-6">
+							<div>
+								<p class="mb-1 text-sm font-medium text-gray-700">
+									<span class="font-bold">Membresía:</span>
+									<span class={tieneDeudaPendiente ? 'font-medium text-red-600' : ''}>
+										{getMembresia()}
+										{#if tieneDeudaPendiente}
+											⚠️ PAGO PENDIENTE{/if}
+									</span>
+								</p>
+							</div>
 						</div>
-					{/if}
+
+						<!-- Tercera columna -->
+						<div class="space-y-6">
+							<div>
+								<p class="mb-1 text-sm font-medium text-gray-700">
+									<span class="font-bold">Teléfono:</span>
+									{cliente.celular}
+								</p>
+							</div>
+
+							<div>
+								<p class="mb-1 text-sm font-medium text-gray-700">
+									<span class="font-bold">Ocupación:</span>
+									{cliente.ocupacion}{#if cliente.puestoTrabajo}
+										- {cliente.puestoTrabajo}{/if}
+								</p>
+							</div>
+						</div>
+					</div>
 
 					{#if tieneDeudaPendiente}
-						<div class="rounded-md border border-red-200 bg-red-50 p-3 md:col-span-2">
-							<p class="font-medium text-red-700">
+						<div class="mx-auto mt-8 max-w-4xl rounded-md border border-red-200 bg-red-50 p-4">
+							<p class="text-center font-medium text-red-700">
 								⚠️ Este cliente tiene un pago pendiente. Complete el pago antes de realizar nuevas
 								acciones.
 							</p>
 						</div>
+					{/if}
+
+					<!-- Información adicional colapsable o en sección separada si es necesaria -->
+					{#if cliente.fechaNacimiento || cliente.direccion || cliente.ciudad}
+						<details class="mx-auto mt-8 max-w-4xl">
+							<summary
+								class="mb-4 cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-800"
+							>
+								Ver información adicional
+							</summary>
+
+							<div class="grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 md:grid-cols-2">
+								{#if cliente.fechaNacimiento}
+									<div>
+										<h3 class="text-sm font-medium text-gray-600">Fecha de nacimiento:</h3>
+										<p class="text-gray-800">{formatDate(cliente.fechaNacimiento)}</p>
+									</div>
+								{/if}
+
+								<div>
+									<h3 class="text-sm font-medium text-gray-600">Dirección:</h3>
+									<p class="text-gray-800">{cliente.direccion}</p>
+								</div>
+
+								<div>
+									<h3 class="text-sm font-medium text-gray-600">Lugar de residencia:</h3>
+									<p class="text-gray-800">{cliente.ciudad} - {cliente.pais}</p>
+								</div>
+
+								{#if cliente.inscripciones && cliente.inscripciones.length > 0}
+									<div>
+										<h3 class="text-sm font-medium text-gray-600">Fecha de inicio:</h3>
+										<p class="text-gray-800">{formatDate(cliente.inscripciones[0].fechaInicio)}</p>
+									</div>
+									<div>
+										<h3 class="text-sm font-medium text-gray-600">Fecha de fin:</h3>
+										<p class="text-gray-800">
+											{cliente.inscripciones[0].fechaFin
+												? formatDate(cliente.inscripciones[0].fechaFin)
+												: 'No definida'}
+										</p>
+									</div>
+								{/if}
+							</div>
+						</details>
 					{/if}
 				</div>
 			</Panel>
 
 			<!-- Panel con tabs - Solo mostrar si hay tabs -->
 			{#if tabs.length > 0}
-				<Panel {tabs} defaultActiveTab="medidas" bind:activeTab>
+				<Panel {tabs} defaultActiveTab="medidas" variant="clean" bind:activeTab>
 					<svelte:fragment slot="header-actions" let:activeTab>
 						{#if activeTab === 'medidas'}
 							<Button variant="primary" size="sm" on:click={handleNuevaMedida}>

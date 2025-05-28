@@ -16,7 +16,7 @@
 
 	export let title: string = '';
 	export let className: string = '';
-	export let variant: 'default' | 'purple' = 'default';
+	export let variant: 'default' | 'purple' | 'clean' = 'default';
 	export let titleIcon: string | null = null;
 
 	// Tabs
@@ -52,45 +52,81 @@
 	function handleTabClick(tabKey: string) {
 		activeTab = tabKey;
 	}
+
+	// Estilos según variante
+	$: containerClasses =
+		variant === 'clean'
+			? `bg-transparent shadow-none ${className}`
+			: `rounded-lg border border-[var(--border)] bg-[var(--sections)] shadow-sm ${className}`;
+
+	$: headerClasses =
+		variant === 'clean'
+			? 'flex flex-wrap items-center justify-between gap-3 pb-4'
+			: `flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--sections-hover)] px-5 py-2.5
+           ${variant === 'purple' ? 'text-[var(--primary)]' : ''}`;
+
+	$: titleClasses =
+		variant === 'clean'
+			? `flex items-center gap-3 text-2xl font-bold text-[var(--letter)]`
+			: `flex items-center gap-3 text-xl font-bold
+           ${variant === 'purple' ? 'text-[var(--primary)]' : 'text-[var(--letter)]'}`;
+
+	$: bodyClasses = variant === 'clean' ? '' : 'p-5';
 </script>
 
-<div class={`rounded-lg border border-[var(--border)] bg-[var(--sections)] shadow-sm ${className}`}>
+<div class={containerClasses}>
 	{#if title || tabs.length > 0}
 		<!-- CABECERA -->
-		<div
-			class={`flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--sections-hover)] px-5 py-2.5
-        ${variant === 'purple' ? 'text-[var(--primary)]' : ''}`}
-		>
+		<div class={headerClasses}>
 			{#if title}
-				<h2
-					class={`flex items-center gap-3 text-xl font-bold
-            ${variant === 'purple' ? 'text-[var(--primary)]' : 'text-[var(--letter)]'}`}
-				>
+				<h2 class={titleClasses}>
 					{#if titleIcon}
-						<Icon name={titleIcon} size={20} />
+						<Icon name={titleIcon} size={variant === 'clean' ? 24 : 20} />
 					{/if}
 					{title}
 				</h2>
 			{/if}
 
 			{#if tabs.length > 0}
-				<div class="flex flex-wrap gap-2">
-					{#each tabs as tab (tab.key)}
-						<Button
-							variant="ghost"
-							size="sm"
-							className={`${
-								activeTab === tab.key
-									? 'bg-[var(--primary)] text-white'
-									: 'text-[var(--letter)] hover:bg-[var(--sections)]'
-							}`}
-							leftIcon={tab.leftIcon}
-							on:click={() => handleTabClick(tab.key)}
-						>
-							{tab.label}
-						</Button>
-					{/each}
-				</div>
+				{#if variant === 'clean'}
+					<!-- Tabs estilo limpio con fondo y bordes -->
+					<div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1">
+						{#each tabs as tab (tab.key)}
+							<button
+								class={`cursor-pointer rounded-md px-4 py-2 text-sm font-medium transition-all duration-200 ${
+									activeTab === tab.key
+										? 'bg-white text-[var(--primary)] shadow-sm'
+										: 'text-gray-600 hover:text-gray-900'
+								}`}
+								on:click={() => handleTabClick(tab.key)}
+							>
+								{#if tab.leftIcon}
+									<Icon name={tab.leftIcon} size={16} className="mr-2 inline" />
+								{/if}
+								{tab.label}
+							</button>
+						{/each}
+					</div>
+				{:else}
+					<!-- Tabs estilo original -->
+					<div class="flex flex-wrap gap-2">
+						{#each tabs as tab (tab.key)}
+							<Button
+								variant="ghost"
+								size="sm"
+								className={`${
+									activeTab === tab.key
+										? 'bg-[var(--primary)] text-white'
+										: 'text-[var(--letter)] hover:bg-[var(--sections)]'
+								}`}
+								leftIcon={tab.leftIcon}
+								on:click={() => handleTabClick(tab.key)}
+							>
+								{tab.label}
+							</Button>
+						{/each}
+					</div>
+				{/if}
 			{/if}
 
 			<div class="ml-auto flex items-center gap-2">
@@ -100,7 +136,7 @@
 	{/if}
 
 	<!-- CUERPO -->
-	<div class="p-5">
+	<div class={bodyClasses}>
 		{#if tabs.length > 0}
 			<!-- Mostrar acciones específicas del tab activo -->
 			<div class="mb-4 flex justify-end">
