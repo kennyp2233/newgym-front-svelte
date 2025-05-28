@@ -6,7 +6,6 @@
 	export let className: string = '';
 	export let strokeWidth: number = 2;
 	export let color: string = 'currentColor';
-
 	// Mapeamos los nombres personalizados a los nombres de Lucide
 	const iconMap: Record<string, string> = {
 		people: 'User',
@@ -29,7 +28,9 @@
 		warning: 'AlertTriangle',
 		error: 'AlertOctagon',
 		close: 'X',
-		x: 'X'
+		x: 'X',
+		'chevron-down': 'ChevronDown',
+		user: 'User'
 	};
 
 	// Obtener el componente de icono correcto

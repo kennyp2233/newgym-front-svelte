@@ -12,14 +12,24 @@
 
 <a
 	{href}
-	class={`flex items-center rounded-md px-4 py-2 transition-colors
-		${isActive ? 'bg-opacity-10 bg-[var(--primary)] text-white' : 'text-[var(--letter)]'}
-		hover:bg-opacity-10 hover:bg-[var(--primary)] hover:text-white`}
+	class="group relative mx-1 flex items-center rounded-lg px-4 py-2.5 transition-all duration-300 ease-out
+		{isActive
+		? 'bg-[var(--primary)] text-white shadow-sm'
+		: 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'}"
 	on:mouseenter={() => (hovered = true)}
 	on:mouseleave={() => (hovered = false)}
->
-	<span class="mr-2 text-xl">
-		<Icon name={isActive || hovered ? activeIcon : icon} size={20} />
-	</span>
-	<span class="font-medium">{label}</span>
+>	<!-- Content -->
+	<div class="relative flex items-center">
+		<span class="mr-2.5 text-lg transition-all duration-300 ease-out">
+			<Icon name={isActive || hovered ? activeIcon : icon} size={18} />
+		</span>
+		<span class="text-sm font-medium">{label}</span>
+	</div>
+
+	<!-- Active indicator -->
+	{#if isActive}
+		<div
+			class="absolute bottom-0 left-1/2 h-0.5 w-8 -translate-x-1/2 transform rounded-full bg-white/80"
+		></div>
+	{/if}
 </a>
