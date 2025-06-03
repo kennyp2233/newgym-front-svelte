@@ -228,6 +228,12 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Crossfit Tulcán | Clientes</title>
+	<meta name="description" content="Manejo de clientes" />
+</svelte:head>
+
+
 <DashboardLayout>
 	<div class="space-y-6">
 		<div class="flex items-center justify-between">

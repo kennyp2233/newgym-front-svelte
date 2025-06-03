@@ -18,6 +18,15 @@ export interface AuthSession {
     idToken?: string
 }
 
+// New writable stores for loading and error states
+export const authLoading = writable<boolean>(false)
+export const authError = writable<string | null>(null)
+
+// Function to clear auth error
+export function clearAuthError() {
+    authError.set(null)
+}
+
 // Store reactivo que extrae la sesión de page.data
 export const session: Readable<any | null> = derived(
     page,
