@@ -17,7 +17,6 @@
 	import NuevaMedidaModal from '../../../features/clientes/components/individual/medidas/NuevaMedidaModal.svelte';
 	import MedidasHistoricas from '../../../features/clientes/components/individual/medidas/MedidasHistoricas.svelte';
 	import HistorialPagos from '../../../features/clientes/components/individual/pagos/HistorialPagos.svelte';
-
 	// Estados reactivos
 	let cliente: Cliente | null = null;
 	let isLoading = false;
@@ -28,6 +27,7 @@
 	let showCompletarPagoModal = false;
 	let tieneDeudaPendiente = false;
 	let pagosPendientes: any[] = [];
+	let historialPagos: any[] = [];
 
 	// Estados para manejo de tabs y modales
 	let activeTab = 'medidas';
@@ -103,13 +103,13 @@
 			isLoading = false;
 		}
 	}
-
 	// Verificar si el cliente tiene deuda pendiente
 	async function checkDeudaPendiente() {
 		if (isNaN(clienteId)) return;
 
 		try {
 			const pagos = await pagoService.getPagosByCliente(clienteId);
+			historialPagos = pagos; // Store complete payment history
 			tieneDeudaPendiente = pagos.some((pago) => pago.estado === 'Pendiente');
 		} catch (error) {
 			console.error('Error al verificar deuda:', error);
@@ -119,13 +119,16 @@
 	// Cargar pagos pendientes
 	async function loadPagosPendientes() {
 		try {
-			const pagos = await pagoService.getPagosByCliente(clienteId);
+			// If we already have historialPagos, use it, otherwise fetch again
+			const pagos = historialPagos.length > 0 ? historialPagos : await pagoService.getPagosByCliente(clienteId);
+			if (historialPagos.length === 0) {
+				historialPagos = pagos;
+			}
 			pagosPendientes = pagos.filter((p) => p.estado === 'Pendiente');
 		} catch (error) {
 			console.error('Error al cargar pagos pendientes:', error);
 		}
 	}
-
 	// Función para recargar datos del cliente
 	async function reloadClienteData() {
 		if (isNaN(clienteId)) return;
@@ -135,6 +138,8 @@
 			const clienteActualizado = await clienteService.getClienteById(clienteId);
 			if (clienteActualizado) {
 				cliente = clienteActualizado;
+				// Clear historialPagos to force fresh data load
+				historialPagos = [];
 				await checkDeudaPendiente();
 				await loadPagosPendientes();
 				// Incrementar key para forzar re-render de componentes hijos
@@ -465,12 +470,12 @@
 				onSuccess={handlePagoSuccess}
 			/>
 		{/if}
-
 		{#if showCompletarPagoModal && cliente}
 			<CompletarPagoModal
 				isOpen={showCompletarPagoModal}
 				{cliente}
 				{pagosPendientes}
+				{historialPagos}
 				onClose={() => (showCompletarPagoModal = false)}
 				onSuccess={handleCompletarPagoSuccess}
 			/>

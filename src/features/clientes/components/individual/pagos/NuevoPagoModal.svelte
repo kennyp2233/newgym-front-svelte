@@ -6,10 +6,11 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
-	import { pagoService, type RenovacionPlanDTO } from '../../../../pagos/api';
+	import { pagoService, type RenovacionPlanDTO, type PagoDTO } from '../../../../pagos/api';
 	import { planService, type Plan } from '../../../../planes/api';
 	import type { Cliente } from '../../../api';
 	import { toasts } from '$lib/stores/toastStore';
+	import { calculateTotalPrice, shouldApplyAnnualFee } from '../../../forms/validation';
 	import * as yup from 'yup';
 
 	export let isOpen = false;
@@ -18,9 +19,9 @@
 	export let isRenovacion = false;
 	export let onClose: () => void = () => {};
 	export let onSuccess: () => void = () => {};
-
 	let planes: Plan[] = [];
 	let planSeleccionado: Plan | null = null;
+	let historialPagos: PagoDTO[] = [];
 	let tieneDeudaActiva = false;
 	let isSubmitting = false;
 	let puedeRenovar: { puede: boolean; mensaje: string; diasRestantes: number } = {
@@ -41,15 +42,14 @@
 				if (!value) return true;
 				const decimal = value.toString().split('.')[1];
 				return !decimal || decimal.length <= 2;
-			})
-			.test(
+			})			.test(
 				'max-amount',
 				'El monto no puede exceder el precio del plan + renovación',
 				function (value) {
 					const { idPlan } = this.parent;
 					if (!value || !idPlan) return true;
 					const plan = planes.find((p) => p.idPlan === parseInt(idPlan));
-					const precioTotal = plan ? plan.precio + 10 : 0; // +$10 renovación según documentación
+					const precioTotal = plan ? calculateTotalPrice(plan.precio, historialPagos, false) : 0;
 					return value <= precioTotal;
 				}
 			),
@@ -226,8 +226,7 @@
 		} catch (error: any) {
 			console.error('Error al procesar pago:', error);
 			const errorMessage = error.message || 'Error al procesar pago';
-			toasts.showToast(errorMessage, 'error');
-		} finally {
+			toasts.showToast(errorMessage, 'error');		} finally {
 			isSubmitting = false;
 		}
 	}
@@ -237,6 +236,9 @@
 		try {
 			const planesData = await planService.getPlanes();
 			planes = planesData;
+
+			// Cargar historial de pagos del cliente
+			historialPagos = await pagoService.getPagosByCliente(cliente.idCliente);
 
 			// Si hay un plan actual, seleccionarlo por defecto
 			if (planActualId) {
@@ -292,11 +294,10 @@
 		fecha.setMonth(fecha.getMonth() + duracionMeses);
 		return fecha.toISOString().split('T')[0];
 	}
-
 	// Calcular precio total con renovación anual según documentación
 	function getPrecioTotal(): number {
-		if (!planSeleccionado) return 10; // Solo renovación anual
-		return planSeleccionado.precio + 10; // Precio del plan + renovación anual ($10)
+		if (!planSeleccionado) return 0;
+		return calculateTotalPrice(planSeleccionado.precio, historialPagos, false);
 	}
 
 	$: añoRenovacion = calcularAñoRenovacion();
@@ -404,9 +405,13 @@
 						name="monto"
 						label="Monto a pagar (Opcional)"
 						type="number"
-						placeholder={precioTotal.toFixed(2)}
-						helperText={planSeleccionado
-							? `Plan: $${planSeleccionado.precio.toFixed(2)} + Renovación: $10.00 = Total: $${precioTotal.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`
+						placeholder={precioTotal.toFixed(2)}						helperText={planSeleccionado
+							? (() => {
+								const annualFee = precioTotal - planSeleccionado.precio;
+								return annualFee > 0 
+									? `Plan: $${planSeleccionado.precio.toFixed(2)} + Renovación anual: $${annualFee.toFixed(2)} = Total: $${precioTotal.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`
+									: `Plan: $${planSeleccionado.precio.toFixed(2)}. No se aplica fee anual este año. Si no especificas monto, se tomará el precio completo.`;
+							})()
 							: 'Seleccione un plan para ver el precio total'}
 						unit="$"
 						min={1}

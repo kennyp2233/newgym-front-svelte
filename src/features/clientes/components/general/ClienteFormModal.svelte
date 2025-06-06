@@ -6,12 +6,12 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import InformacionPersonalStepFixed from './InformacionPersonalStepFixed.svelte';
 	import MedidasStepFixed from './MedidasStepFixed.svelte';
-	import ResumenStepFixed from './ResumenStepFixed.svelte';
-	import {
+	import ResumenStepFixed from './ResumenStepFixed.svelte';	import {
 		Step1Schema,
 		Step2Schema,
 		Step3Schema,
 		CompleteSchema,
+		createStep3SchemaWithPlanValidation,
 		defaultClienteFormValues,
 		type ClienteFormData
 	} from '../../forms/validation';
@@ -127,7 +127,6 @@
 			// errors.set({}); // Clears all errors
 		}
 	}
-
 	// Obtener el esquema para el paso actual
 	function getSchemaForCurrentStep() {
 		switch (currentStep) {
@@ -136,7 +135,8 @@
 			case 1:
 				return Step2Schema;
 			case 2:
-				return Step3Schema;
+				// Usar validación dinámica con los planes cargados
+				return planes.length > 0 ? createStep3SchemaWithPlanValidation(planes) : Step3Schema;
 			default:
 				return Step1Schema;
 		}

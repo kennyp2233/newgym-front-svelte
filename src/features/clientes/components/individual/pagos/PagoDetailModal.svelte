@@ -10,31 +10,45 @@
 	import type { Cliente } from '../../../api';
 	import { toasts } from '$lib/stores/toastStore';
 	import * as yup from 'yup';
-
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let pago: PagoDTO;
+	export let canEdit = true; // Nueva prop para controlar si se puede editar
 	export let onClose: () => void = () => {};
 	export let onSuccess: () => void = () => {};
 
 	let isEditing = false;
 	let isSubmitting = false;
-	let showDeleteConfirm = false;
-
-	// Esquema de validación
+	let showDeleteConfirm = false;	// Esquema de validación
 	const validationSchema = yup.object({
-		monto: yup.number().required('El monto es requerido').min(1, 'El monto debe ser mayor a $1.00'),
+		monto: yup.number()
+			.required('El monto es requerido')
+			.min(1, 'El monto debe ser mayor a $1.00')
+			.test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
+				if (!value) return true;
+				const decimal = value.toString().split('.')[1];
+				return !decimal || decimal.length <= 2;
+			})
+			.test('max-amount', 'El monto no puede exceder el precio del plan + renovación anual ($10)', (value) => {
+				if (!value) return true;
+				const plan = pago.inscripcion?.plan;
+				if (!plan) return true;
+				const precioTotal = plan.precio + 10; // Plan + $10 renovación anual
+				return value <= precioTotal;
+			}),
 		metodoPago: yup.string().nullable(),
+		estado: yup.string().required('El estado es requerido'),
 		referencia: yup.string().nullable(),
 		observaciones: yup
 			.string()
 			.max(150, 'Las observaciones no pueden exceder 150 caracteres')
 			.nullable()
-	}); // Configuración del formulario con valores iniciales del pago (sin validationSchema para manejar validación manual)
+	});// Configuración del formulario con valores iniciales del pago (sin validationSchema para manejar validación manual)
 	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			monto: pago.monto.toString(),
 			metodoPago: pago.metodoPago || '',
+			estado: pago.estado || 'Completado',
 			referencia: pago.referencia || '',
 			observaciones: pago.observaciones || ''
 		},
@@ -91,11 +105,11 @@
 			return;
 		}
 
-		isSubmitting = true;
-		try {
+		isSubmitting = true;		try {
 			const pagoData = {
 				monto: parseFloat($form.monto),
 				metodoPago: $form.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta' | undefined,
+				estado: $form.estado as 'Completado' | 'Pendiente' | 'Anulado',
 				referencia: $form.referencia || undefined,
 				observaciones: $form.observaciones || undefined
 			};
@@ -135,13 +149,13 @@
 			default:
 				return 'bg-gray-100 text-gray-800';
 		}
-	}
-	function toggleEdit() {
+	}	function toggleEdit() {
 		isEditing = !isEditing;
 		if (!isEditing) {
 			// Resetear valores del formulario usando el wrapper
 			updateFieldWrapper('monto', pago.monto.toString());
 			updateFieldWrapper('metodoPago', pago.metodoPago || '');
+			updateFieldWrapper('estado', pago.estado || 'Completado');
 			updateFieldWrapper('referencia', pago.referencia || '');
 			updateFieldWrapper('observaciones', pago.observaciones || '');
 		}
@@ -188,9 +202,7 @@
 			<div class="space-y-4">
 				<p class="mb-4 text-sm text-gray-600">
 					Editar pago de <strong>{cliente.nombre} {cliente.apellido}</strong>
-				</p>
-
-				<FormRow>
+				</p>				<FormRow>
 					<FormField
 						name="monto"
 						label="Monto"
@@ -220,6 +232,19 @@
 
 				<FormRow>
 					<FormField
+						name="estado"
+						label="Estado"
+						type="select"
+						options={[
+							{ value: 'Pendiente', label: 'Pendiente' },
+							{ value: 'Completado', label: 'Completado' },
+							{ value: 'Anulado', label: 'Anulado' }
+						]}
+						bind:value={$form.estado}
+						errors={$errors}
+						touched={$touched}
+					/>
+					<FormField
 						name="referencia"
 						label="Referencia"
 						placeholder="Ej: TRF-123456"
@@ -227,7 +252,6 @@
 						errors={$errors}
 						touched={$touched}
 					/>
-					<div></div>
 				</FormRow>
 
 				<div class="w-full space-y-1.5">
@@ -355,17 +379,22 @@
 			</Button>
 			<Button variant="primary" on:click={handleSubmitForm} type="button" isLoading={isSubmitting}>
 				Guardar Cambios
-			</Button>
-		{:else}
+			</Button>		{:else}
 			<Button variant="outline" on:click={onClose}>Cerrar</Button>
-			<Button variant="danger" on:click={() => (showDeleteConfirm = true)}>
-				<Icon name="trash" size={16} className="mr-2" />
-				Eliminar
-			</Button>
-			<Button variant="primary" on:click={toggleEdit}>
-				<Icon name="edit" size={16} className="mr-2" />
-				Editar Pago
-			</Button>
+			{#if canEdit}
+				<Button variant="danger" on:click={() => (showDeleteConfirm = true)}>
+					<Icon name="trash" size={16} className="mr-2" />
+					Eliminar
+				</Button>
+				<Button variant="primary" on:click={toggleEdit}>
+					<Icon name="edit" size={16} className="mr-2" />
+					Editar Pago
+				</Button>
+			{:else}
+				<div class="text-sm text-gray-500">
+					Solo se puede editar el pago más reciente
+				</div>
+			{/if}
 		{/if}
 	</svelte:fragment>
 </BaseModal>

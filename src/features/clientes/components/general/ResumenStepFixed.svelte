@@ -4,6 +4,7 @@
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
 	import { calcularIMC } from '$lib/utils';
 	import { planService, type Plan } from '../../../planes/api';
+	import { calculateTotalPrice } from '../../forms/validation';
 
 	export let data: any;
 	export let errors: any;
@@ -17,10 +18,10 @@
 			? planService.calcularFechaFin(data.fechaInicio, planSeleccionado.duracionMeses)
 			: '';
 	$: imcData = calcularIMC(parseFloat(data.peso || '0'), parseFloat(data.altura || '0'));
-	$: imc = imcData ? `${imcData.imc} - ${imcData.categoria}` : 'Pendiente de cálculo';
-
-	// Calcular valores de pago
-	$: precioTotal = planSeleccionado ? Number(planSeleccionado.precio) : 0;
+	$: imc = imcData ? `${imcData.imc} - ${imcData.categoria}` : 'Pendiente de cálculo';	// Calcular valores de pago (incluye renovación anual de $10 para nuevos clientes)
+	$: precioBase = planSeleccionado ? Number(planSeleccionado.precio) : 0;
+	$: precioTotal = planSeleccionado ? calculateTotalPrice(precioBase, [], true) : 0; // true = es cliente nuevo
+	$: annualFee = precioTotal - precioBase; // Mostrar el fee por separado
 	$: montoPago = data.monto ? parseFloat(data.monto) : precioTotal;
 	$: montoPendiente = Math.max(0, precioTotal - montoPago);
 	$: caracteresRestantes = 150 - (data.observaciones?.length || 0);
@@ -71,7 +72,9 @@
 				min={0}
 				max={precioTotal}
 				step="0.01"
-				helperText={`Precio del plan: $${precioTotal.toFixed(2)}. Si no especificas un monto, se tomará el precio completo.`}
+				helperText={annualFee > 0 
+					? `Precio del plan: $${precioBase.toFixed(2)} + Renovación anual: $${annualFee.toFixed(2)} = Total: $${precioTotal.toFixed(2)}. Si no especificas un monto, se tomará el precio completo.`
+					: `Precio del plan: $${precioBase.toFixed(2)}. Si no especificas un monto, se tomará el precio completo.`}
 				bind:value={data.monto}
 				{errors}
 				{touched}

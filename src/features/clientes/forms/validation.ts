@@ -1,6 +1,7 @@
 // src/features/clientes/forms/validation.ts
 import * as yup from 'yup';
 import { TipoOcupacion } from '../api';
+import type { PagoDTO } from '../../pagos/api';
 
 // Esquemas por paso
 export const Step1Schema = yup.object({
@@ -112,8 +113,7 @@ export const Step3Schema = yup.object({
             const hoy = new Date();
             const fechaHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
             return fechaSeleccionada >= fechaHoy;
-        }),
-    monto: yup
+        }),    monto: yup
         .mixed()
         .test('is-number-or-empty', 'Debe ser un número válido', (value) => {
             if (value === '' || value === null || value === undefined) return true;
@@ -124,6 +124,15 @@ export const Step3Schema = yup.object({
             const decimal = value.toString().split('.')[1];
             return !decimal || decimal.length <= 2;
         })
+        .test('max-amount', 'El monto no puede exceder el precio del plan + renovación anual ($10)', function (value) {
+            if (!value) return true;
+            const planId = this.parent.idPlan;
+            if (!planId) return true;
+            
+            // Este test debe ser usado con un contexto que tenga acceso a los planes
+            // La validación específica se implementará en cada componente
+            return true;
+        })
         .nullable(),
     referencia: yup.string().nullable(),
     observaciones: yup
@@ -131,6 +140,58 @@ export const Step3Schema = yup.object({
         .max(150, 'Las observaciones no pueden exceder 150 caracteres')
         .nullable()
 });
+
+// Helper para validar monto máximo considerando plan + renovación anual
+export const createMontoValidation = (planes: any[]) => {
+    return yup
+        .mixed()
+        .test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+            if (value === '' || value === null || value === undefined) return true;
+            return !isNaN(Number(value)) && Number(value) >= 0;
+        })
+        .test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
+            if (!value) return true;
+            const decimal = value.toString().split('.')[1];
+            return !decimal || decimal.length <= 2;
+        })
+        .test('max-amount', 'El monto no puede exceder el precio del plan + renovación anual ($10)', function (value) {
+            if (!value) return true;
+            const planId = this.parent.idPlan;
+            if (!planId) return true;
+            
+            const plan = planes.find(p => p.idPlan === parseInt(planId));
+            if (!plan) return true;
+            
+            const precioTotal = plan.precio + 10; // Plan + $10 renovación anual
+            return Number(value) <= precioTotal;
+        })
+        .nullable();
+};
+
+// Helper para crear Step3Schema con validación de monto específica
+export const createStep3SchemaWithPlanValidation = (planes: any[]) => {
+    return yup.object({
+        fechaInicio: yup
+            .string()
+            .required('La fecha de inicio es requerida')
+            .test('is-valid-date', 'La fecha no es válida', (val) => {
+                return !!val && !isNaN(Date.parse(val));
+            }).test('not-in-past', 'La fecha de inicio no puede ser anterior a hoy', (val) => {
+                if (!val) return false;
+                const [year, month, day] = val.split('-').map(Number);
+                const fechaSeleccionada = new Date(year, month - 1, day);
+                const hoy = new Date();
+                const fechaHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+                return fechaSeleccionada >= fechaHoy;
+            }),
+        monto: createMontoValidation(planes),
+        referencia: yup.string().nullable(),
+        observaciones: yup
+            .string()
+            .max(150, 'Las observaciones no pueden exceder 150 caracteres')
+            .nullable()
+    });
+};
 
 // Esquema completo combinado para svelte-forms-lib
 export const CompleteSchema = yup.object().shape({
@@ -173,3 +234,33 @@ export const defaultClienteFormValues: ClienteFormData = {
     referencia: null,
     observaciones: null,
 };
+
+// Función para determinar si debe aplicarse el fee anual de $10
+export function shouldApplyAnnualFee(pagos: PagoDTO[] = [], isNewClient: boolean = false): boolean {
+	// Si es un cliente nuevo (primer registro), siempre se aplica el fee
+	if (isNewClient || pagos.length === 0) {
+		return true;
+	}
+
+	// Buscar el último pago que incluía fee anual
+	// Los pagos de inscripción inicial y renovaciones anuales incluyen el fee
+	const now = new Date();
+	const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+	// Buscar pagos que podrían haber incluido fee anual en el último año
+	const recentPaymentsWithFee = pagos.filter(pago => {
+		const fechaPago = new Date(pago.fechaPago);
+		// Si es un pago de inscripción inicial o es una renovación
+		const includesFee = !pago.esRenovacion || pago.esRenovacion;
+		return fechaPago >= oneYearAgo && includesFee;
+	});
+
+	// Si no hay pagos con fee en el último año, debe aplicarse
+	return recentPaymentsWithFee.length === 0;
+}
+
+// Función para calcular el precio total considerando el fee anual
+export function calculateTotalPrice(planPrice: number, pagos: PagoDTO[] = [], isNewClient: boolean = false): number {
+	const annualFee = shouldApplyAnnualFee(pagos, isNewClient) ? 10 : 0;
+	return planPrice + annualFee;
+}

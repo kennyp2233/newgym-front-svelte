@@ -7,10 +7,11 @@
 	import { pagoService, type PagoDTO } from '../../../../pagos/api';
 	import type { Cliente } from '../../../api';
 	import { toasts } from '$lib/stores/toastStore';
-
+	import { calculateTotalPrice } from '../../../forms/validation';
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let pagosPendientes: PagoDTO[] = [];
+	export let historialPagos: PagoDTO[] = []; // Nueva prop para el historial completo
 	export let onClose: () => void = () => {};
 	export let onSuccess: () => void = () => {};
 
@@ -24,11 +25,10 @@
 
 	// ✅ OBTENER EL PAGO SELECCIONADO DE FORMA REACTIVA
 	$: selectedPago = pagosPendientes.find((p) => p.idPago!.toString() === selectedPagoId) || null;
-
-	// Calcular monto restante
+	// Calcular monto restante usando la nueva lógica
 	function getMontoRestante(pago: PagoDTO): number {
 		if (!pago.inscripcion?.plan) return 0;
-		const precioTotal = pago.inscripcion.plan.precio + 10; // +$10 renovación anual
+		const precioTotal = calculateTotalPrice(pago.inscripcion.plan.precio, historialPagos, false);
 		return precioTotal - pago.monto;
 	}
 
@@ -40,7 +40,6 @@
 			year: 'numeric'
 		});
 	}
-
 	async function handleCompletarPago() {
 		if (!selectedPago) {
 			toasts.showToast('No hay pago seleccionado', 'error');
