@@ -7,27 +7,34 @@
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
-	import BaseModal from '$lib/components/modals/BaseModal.svelte';	import { clienteService, type Cliente, TipoOcupacion } from '../../../features/clientes/api';
+	import BaseModal from '$lib/components/modals/BaseModal.svelte';
+	import { clienteService, type Cliente, TipoOcupacion } from '../../../features/clientes/api';
 	import { pagoService } from '../../../features/pagos/api';
 	import { toasts } from '$lib/stores/toastStore';
 	import EditarClienteModal from '../../../features/clientes/components/individual/info-personal/EditarClienteModal.svelte';
 	import NuevoPagoModal from '../../../features/clientes/components/individual/pagos/NuevoPagoModal.svelte';
 	import CompletarPagoModal from '../../../features/clientes/components/individual/pagos/CompletarPagoModal.svelte';
 	import NuevaMedidaModal from '../../../features/clientes/components/individual/medidas/NuevaMedidaModal.svelte';
-	import MedidasHistoricas from '../../../features/clientes/components/individual/medidas/MedidasHistoricas.svelte';	import HistorialPagos from '../../../features/clientes/components/individual/pagos/HistorialPagos.svelte';
-	
+	import MedidasHistoricas from '../../../features/clientes/components/individual/medidas/MedidasHistoricas.svelte';
+	import HistorialPagos from '../../../features/clientes/components/individual/pagos/HistorialPagos.svelte';
+
 	// Importar servicio de cuotas mantenimiento
-	import { cuotaMantenimientoService, type CuotaMantenimientoDTO } from '../../../features/cuotas-mantenimiento/api';
-	
+	import {
+		cuotaMantenimientoService,
+		type CuotaMantenimientoDTO
+	} from '../../../features/cuotas-mantenimiento/api';
+
 	// Importar composables
-	import { createClienteStore, clienteUtils } from '../../../features/clientes/composables/clienteComposables';
-		// Reactive statements
+	import {
+		createClienteStore,
+		clienteUtils
+	} from '../../../features/clientes/composables/clienteComposables';
+	// Reactive statements
 	$: clienteId = parseInt($page.params.id);
-	
+
 	// Initialize composable store for individual client
 	$: clienteStore = createClienteStore(clienteId);
 	$: ({ cliente, isLoading, error, esActivo, diasRestantes } = clienteStore);
-	
 	// Local state for modals and other UI interactions
 	let showEditModal = false;
 	let showPagoModal = false;
@@ -37,7 +44,8 @@
 	let tieneDeudaPendiente = false;
 	let pagosPendientes: any[] = [];
 	let historialPagos: any[] = [];
-	
+	let preselectedPago: any = null; // Para auto-seleccionar el último pago pendiente
+
 	// Estados para cuotas de mantenimiento
 	let cuotasPendientes: CuotaMantenimientoDTO[] = [];
 	let tieneCuotasPendientes = false;
@@ -46,7 +54,7 @@
 	let activeTab = 'medidas';
 
 	// Key para forzar re-render de componentes
-	let componentKey = 0;	// IMPORTANTE: Hacer que los tabs sean reactivos al cliente
+	let componentKey = 0; // IMPORTANTE: Hacer que los tabs sean reactivos al cliente
 	$: tabs = $cliente
 		? [
 				{
@@ -70,13 +78,12 @@
 						clienteId,
 						cliente: $cliente,
 						onUpdate: reloadClienteData,
-						key: componentKey, // Forzar re-render
-						// NUEVO: Pasar cuotas pendientes para identificación de pagos
-						cuotasPendientesGlobales: cuotasPendientes
+						key: componentKey // Forzar re-render
 					}
 				}
 			]
-		: [];	onMount(async () => {
+		: [];
+	onMount(async () => {
 		// Verificar que tenemos un ID válido
 		if (isNaN(clienteId)) {
 			toasts.showToast('ID de cliente inválido', 'error');
@@ -89,54 +96,66 @@
 		await loadPagosPendientes();
 		// IMPORTANTE: Cargar cuotas pendientes para asociarlas a los pagos
 		await loadCuotasPendientes();
-	});
-
-	// Verificar si el cliente tiene deuda pendiente
+	}); // Verificar si el cliente tiene pagos de planes pendientes (NO cuotas de mantenimiento)
 	async function checkDeudaPendiente() {
 		if (isNaN(clienteId)) return;
 
 		try {
 			const pagos = await pagoService.getPagosByCliente(clienteId);
 			historialPagos = pagos; // Store complete payment history
-			tieneDeudaPendiente = pagos.some((pago) => pago.estado === 'Pendiente');
+
+			// Solo considerar pagos de PLANES pendientes, no cuotas de mantenimiento
+			// Los pagos de planes tienen la propiedad 'inscripcion' que los identifica como pagos de membresía
+			tieneDeudaPendiente = pagos.some(
+				(pago) => pago.estado === 'Pendiente' && pago.inscripcion // Solo pagos de planes
+			);
 		} catch (error) {
 			console.error('Error al verificar deuda:', error);
 		}
 	}
-	// Cargar pagos pendientes
+	// Cargar pagos de planes pendientes (NO cuotas de mantenimiento)
 	async function loadPagosPendientes() {
 		try {
 			// If we already have historialPagos, use it, otherwise fetch again
-			const pagos = historialPagos.length > 0 ? historialPagos : await pagoService.getPagosByCliente(clienteId);
+			const pagos =
+				historialPagos.length > 0 ? historialPagos : await pagoService.getPagosByCliente(clienteId);
 			if (historialPagos.length === 0) {
 				historialPagos = pagos;
 			}
-			pagosPendientes = pagos.filter((p) => p.estado === 'Pendiente');
+
+			// Solo incluir pagos de planes pendientes (que tienen inscripcion)
+			pagosPendientes = pagos.filter(
+				(p) => p.estado === 'Pendiente' && p.inscripcion // Solo pagos de planes
+			);
 		} catch (error) {
 			console.error('Error al cargar pagos pendientes:', error);
 		}
 	}
-	
-	// NUEVA FUNCIÓN: Cargar cuotas pendientes del cliente
+	// FUNCIÓN: Cargar cuotas de mantenimiento pendientes del cliente
 	async function loadCuotasPendientes() {
 		if (isNaN(clienteId)) return;
-		
+
 		try {
 			// Verificar si tiene cuotas pendientes
 			const cuotasResponse = await cuotaMantenimientoService.tieneCuotasPendientes(clienteId);
 			tieneCuotasPendientes = cuotasResponse.tienePendientes;
-			
-			// Cargar todas las cuotas para poder asociarlas a los pagos
-			const todasCuotas = await cuotaMantenimientoService.getCuotasByCliente(clienteId);
-			cuotasPendientes = todasCuotas.filter(cuota => cuota.estado === 'Pendiente');
-			
+
+			// Cargar solo las cuotas pendientes
+			if (cuotasResponse.tienePendientes && cuotasResponse.cuotas) {
+				cuotasPendientes = cuotasResponse.cuotas;
+			} else {
+				// Si no hay en la respuesta, cargar todas y filtrar
+				const todasCuotas = await cuotaMantenimientoService.getCuotasByCliente(clienteId);
+				cuotasPendientes = todasCuotas.filter((cuota) => cuota.estado === 'Pendiente');
+			}
+
 			console.log('Cuotas pendientes cargadas:', cuotasPendientes);
 		} catch (error) {
 			console.error('Error al cargar cuotas pendientes:', error);
 			cuotasPendientes = [];
 			tieneCuotasPendientes = false;
 		}
-	}	// Función para recargar datos del cliente usando composable
+	} // Función para recargar datos del cliente usando composable
 	async function reloadClienteData() {
 		if (isNaN(clienteId)) return;
 
@@ -146,7 +165,7 @@
 			historialPagos = [];
 			await checkDeudaPendiente();
 			await loadPagosPendientes();
-			// IMPORTANTE: Recargar cuotas pendientes también
+			// Recargar cuotas pendientes también
 			await loadCuotasPendientes();
 			// Incrementar key para forzar re-render de componentes hijos
 			componentKey++;
@@ -154,7 +173,7 @@
 			console.error('Error al recargar datos:', error);
 			toasts.showToast('Error al recargar datos del cliente', 'error');
 		}
-	}	// Calcular edad usando la utilidad del composable
+	} // Calcular edad usando la utilidad del composable
 	function calcularEdad(fechaNacimiento?: string): number {
 		return clienteUtils.calcularEdad(fechaNacimiento) ?? 0;
 	}
@@ -189,8 +208,17 @@
 	function handleDeleteCliente() {
 		showDeleteModal = true;
 	}
-
 	function handleCompletarPago() {
+		// Automáticamente seleccionar el último pago pendiente
+		if (pagosPendientes.length > 0) {
+			// Ordenar por fecha de pago (más reciente primero) y seleccionar el primero
+			const pagosOrdenados = [...pagosPendientes].sort(
+				(a, b) => new Date(b.fechaPago).getTime() - new Date(a.fechaPago).getTime()
+			);
+			preselectedPago = pagosOrdenados[0];
+		} else {
+			preselectedPago = null;
+		}
 		showCompletarPagoModal = true;
 	}
 	async function confirmDeleteCliente() {
@@ -220,9 +248,9 @@
 		showMedidaModal = false;
 		reloadClienteData();
 	}
-
 	function handleCompletarPagoSuccess() {
 		showCompletarPagoModal = false;
+		preselectedPago = null; // Limpiar la preselección
 		reloadClienteData();
 	}
 </script>
@@ -235,7 +263,8 @@
 				<Button variant="outline" size="sm" on:click={() => goto('/clientes')}>
 					<Icon name="arrow-left" size={16} className="mr-2" />
 					Volver
-				</Button>				<h1 class="text-2xl font-bold text-[var(--letter)]">
+				</Button>
+				<h1 class="text-2xl font-bold text-[var(--letter)]">
 					{$isLoading ? 'Cargando...' : 'Ficha de cliente'}
 				</h1>
 			</div>
@@ -265,7 +294,8 @@
 
 				<div class="rounded-lg bg-white p-6 shadow-sm">
 					<!-- Header principal con nombre y cédula centrado -->
-					<div class="mb-8 text-center">						<h1 class="mb-2 text-2xl font-bold text-[var(--primary)]">
+					<div class="mb-8 text-center">
+						<h1 class="mb-2 text-2xl font-bold text-[var(--primary)]">
 							{$cliente.apellido}
 							{$cliente.nombre}
 						</h1>
@@ -278,13 +308,15 @@
 					<div class="mx-auto grid max-w-4xl grid-cols-1 gap-x-12 gap-y-6 md:grid-cols-3">
 						<!-- Primera columna -->
 						<div class="space-y-6">
-							<div>								<p class="mb-1 text-sm font-medium text-gray-700">
+							<div>
+								<p class="mb-1 text-sm font-medium text-gray-700">
 									<span class="font-bold">Edad:</span>
 									{calcularEdad($cliente.fechaNacimiento)} años
 								</p>
 							</div>
 
-							<div>								<p class="mb-1 text-sm font-medium text-gray-700">
+							<div>
+								<p class="mb-1 text-sm font-medium text-gray-700">
 									<span class="font-bold">Correo electrónico:</span>
 									{$cliente.correo}
 								</p>
@@ -298,22 +330,30 @@
 									<span class="font-bold">Membresía:</span>
 									<span class={tieneDeudaPendiente ? 'font-medium text-red-600' : ''}>
 										{getMembresia()}
-										{#if tieneDeudaPendiente}
-											⚠️ PAGO PENDIENTE{/if}
 									</span>
 								</p>
+								{#if tieneDeudaPendiente}
+									<p class="text-sm font-medium text-red-600">⚠️ PAGO DE PLAN PENDIENTE</p>
+								{:else if tieneCuotasPendientes}
+									<p class="text-sm font-medium text-orange-600">
+										⚠️ {cuotasPendientes.length} cuota{cuotasPendientes.length > 1 ? 's' : ''} de mantenimiento
+										pendiente{cuotasPendientes.length > 1 ? 's' : ''}
+									</p>
+								{/if}
 							</div>
 						</div>
 
 						<!-- Tercera columna -->
 						<div class="space-y-6">
-							<div>								<p class="mb-1 text-sm font-medium text-gray-700">
+							<div>
+								<p class="mb-1 text-sm font-medium text-gray-700">
 									<span class="font-bold">Teléfono:</span>
 									{$cliente.celular}
 								</p>
 							</div>
 
-							<div>								<p class="mb-1 text-sm font-medium text-gray-700">
+							<div>
+								<p class="mb-1 text-sm font-medium text-gray-700">
 									<span class="font-bold">Ocupación:</span>
 									{$cliente.ocupacion}{#if $cliente.puestoTrabajo}
 										- {$cliente.puestoTrabajo}{/if}
@@ -321,12 +361,22 @@
 							</div>
 						</div>
 					</div>
-
 					{#if tieneDeudaPendiente}
 						<div class="mx-auto mt-8 max-w-4xl rounded-md border border-red-200 bg-red-50 p-4">
 							<p class="text-center font-medium text-red-700">
-								⚠️ Este cliente tiene un pago pendiente. Complete el pago antes de realizar nuevas
-								acciones.
+								⚠️ Este cliente tiene un pago de plan pendiente. Complete el pago antes de realizar
+								nuevas acciones.
+							</p>
+						</div>
+					{:else if tieneCuotasPendientes}
+						<div
+							class="mx-auto mt-8 max-w-4xl rounded-md border border-orange-200 bg-orange-50 p-4"
+						>
+							<p class="text-center font-medium text-orange-700">
+								ℹ️ Este cliente tiene {cuotasPendientes.length} cuota{cuotasPendientes.length > 1
+									? 's'
+									: ''} de mantenimiento pendiente{cuotasPendientes.length > 1 ? 's' : ''}. Pueden
+								incluirse en la próxima renovación de plan.
 							</p>
 						</div>
 					{/if}
@@ -338,7 +388,8 @@
 								class="mb-4 cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-800"
 							>
 								Ver información adicional
-							</summary>							<div class="grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 md:grid-cols-2">
+							</summary>
+							<div class="grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 md:grid-cols-2">
 								{#if $cliente.fechaNacimiento}
 									<div>
 										<h3 class="text-sm font-medium text-gray-600">Fecha de nacimiento:</h3>
@@ -386,13 +437,18 @@
 								Nueva Medida
 							</Button>
 						{:else if activeTab === 'pagos'}
-							{#if pagosPendientes.length > 0}
+							{#if tieneDeudaPendiente}
 								<Button variant="success" size="sm" on:click={handleCompletarPago}>
 									<Icon name="check" size={16} className="mr-2" />
 									Completar Pago Pendiente
 								</Button>
 							{:else}
-								<Button variant="primary" size="sm" on:click={handleNuevoPago}>
+								<Button
+									variant="primary"
+									size="sm"
+									disabled={tieneDeudaPendiente}
+									on:click={handleNuevoPago}
+								>
 									<Icon name="plus" size={16} className="mr-2" />
 									Renovar Plan
 								</Button>
@@ -405,7 +461,8 @@
 			<div class="flex h-64 items-center justify-center text-gray-500">Cliente no encontrado</div>
 		{/if}
 
-		<!-- Modales -->		{#if showEditModal && $cliente}
+		<!-- Modales -->
+		{#if showEditModal && $cliente}
 			<EditarClienteModal
 				isOpen={showEditModal}
 				cliente={$cliente}
@@ -430,7 +487,11 @@
 				cliente={$cliente}
 				{pagosPendientes}
 				{historialPagos}
-				onClose={() => (showCompletarPagoModal = false)}
+				{preselectedPago}
+				onClose={() => {
+					showCompletarPagoModal = false;
+					preselectedPago = null; // Limpiar la preselección al cerrar
+				}}
 				onSuccess={handleCompletarPagoSuccess}
 			/>
 		{/if}
@@ -453,7 +514,8 @@
 		>
 			<svelte:fragment slot="header">
 				<h3 class="text-lg font-semibold">Confirmar eliminación</h3>
-			</svelte:fragment>			<div class="p-4 text-center">
+			</svelte:fragment>
+			<div class="p-4 text-center">
 				<p>¿Estás seguro que deseas eliminar este cliente?</p>
 				<p class="mt-2 font-bold">
 					{$cliente?.nombre}
@@ -464,7 +526,9 @@
 
 			<svelte:fragment slot="footer">
 				<Button variant="outline" on:click={() => (showDeleteModal = false)}>Cancelar</Button>
-				<Button variant="danger" on:click={confirmDeleteCliente} isLoading={$isLoading}>Eliminar</Button>
+				<Button variant="danger" on:click={confirmDeleteCliente} isLoading={$isLoading}
+					>Eliminar</Button
+				>
 			</svelte:fragment>
 		</BaseModal>
 	</div>

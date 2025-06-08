@@ -60,12 +60,14 @@ export interface RegistroCompletoDTO {
     cliente: ClienteDTO;
     medidas: MedidaDTO;
     inscripcion: InscripcionDTO;
-    pago?: {
-        monto?: number;
+    pago: {
+        monto: number;
         referencia?: string;
         observaciones?: string;
-        incluyeAnualidad?: boolean;
-        montoAnualidad?: number;
+    };
+    cuotaMantenimiento?: {
+        pagarAhora: boolean;
+        observaciones?: string;
     };
 }
 
@@ -155,13 +157,11 @@ class ClienteService {
             console.error(`Error al eliminar cliente con ID ${id}:`, error);
             return false;
         }
-    }
-
-    // Registrar cliente completo (con medidas, inscripción y pago)
+    }    // Registrar cliente completo (con medidas, inscripción y pago)
     async registrarCompleto(registroData: RegistroCompletoDTO): Promise<Cliente | null> {
         try {
-            // Asegurarnos que los campos se ajustan al formato esperado por el backend
-            const data = {
+            // Estructurar los datos según la documentación del backend
+            const data: any = {
                 cliente: registroData.cliente,
                 medidas: registroData.medidas,
                 inscripcion: {
@@ -171,19 +171,23 @@ class ClienteService {
                     fechaFin: registroData.inscripcion.fechaFin
                         ? new Date(registroData.inscripcion.fechaFin)
                         : undefined
-                },                // ✅ CORREGIDO: Incluir los datos del pago con campos de anualidad
-                pago: registroData.pago ? {
+                },
+                pago: {
                     monto: registroData.pago.monto,
                     referencia: registroData.pago.referencia,
-                    observaciones: registroData.pago.observaciones,
-                    incluyeAnualidad: registroData.pago.incluyeAnualidad,
-                    montoAnualidad: registroData.pago.montoAnualidad
-                } : undefined
+                    observaciones: registroData.pago.observaciones
+                }
             };
+
+            // Solo agregar cuotaMantenimiento si está presente
+            if (registroData.cuotaMantenimiento) {
+                data.cuotaMantenimiento = registroData.cuotaMantenimiento;
+            }
 
             console.log('Enviando datos completos al backend:', data);
 
             const response = await api.post('/clientes/registro', data);
+            return response.data;
             return response.data;
         } catch (error) {
             console.error('Error al registrar cliente completo:', error);

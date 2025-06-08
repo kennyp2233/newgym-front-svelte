@@ -1,4 +1,3 @@
-// src/features/clientes/components/individual/pagos/forms/PagoFormFields.svelte
 <script lang="ts">
     import FormField from '$lib/components/ui/forms/FormField.svelte';
     import FormRow from '$lib/components/ui/forms/FormRow.svelte';
@@ -12,25 +11,16 @@
     export let precioTotal: number = 0;
     export let caracteresRestantes: number = 150;
     export let isRenovacion: boolean = false;
-    export let añoRenovacion: number = new Date().getFullYear();
     export let showPlanField = true;
     export let showDateField = true;
     export let showObservationsField = true;
+    export let showReferenceField = true;
     export let maxMonto: number | undefined = undefined;
     export let helperTextMonto = '';
-    
     // Nuevas props para cuotas de mantenimiento
-    export let incluyeAnualidad: boolean = false;
     export let cuotasPendientes: any[] = [];
-    export let montoDesglose: { plan: number; anualidad: number; cuotasPendientes: number } | null = null;
     
-    // Computed
-    $: metodoPagoOptions = [
-        { value: '', label: 'No especificar' },
-        { value: 'Efectivo', label: 'Efectivo' },
-        { value: 'Transferencia', label: 'Transferencia' },
-        { value: 'Tarjeta', label: 'Tarjeta de crédito/débito' }
-    ];
+    // Computed    // metodoPago field removed as per new requirements - payment method is no longer tracked
     
     $: planOptions = [
         { value: '', label: 'Seleccionar plan' },
@@ -51,47 +41,15 @@
     }    // Helper text dinámico para monto con cuotas de mantenimiento
     $: montoHelperText = planSeleccionado
         ? (() => {
-            if (montoDesglose) {
-                const parts = [];
-                parts.push(`Plan: $${montoDesglose.plan.toFixed(2)}`);
-                
-                if (montoDesglose.anualidad > 0) {
-                    parts.push(`Renovación anual: $${montoDesglose.anualidad.toFixed(2)}`);
-                }
-                
-                if (montoDesglose.cuotasPendientes > 0) {
-                    parts.push(`Cuotas pendientes: $${montoDesglose.cuotasPendientes.toFixed(2)}`);
-                }
-                
-                return `${parts.join(' + ')} = Total: $${precioTotal.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`;
+            const cuotasPendientesTotal = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+            if (cuotasPendientesTotal > 0) {
+                return `Plan: $${planSeleccionado.precio.toFixed(2)} + Cuotas pendientes: $${cuotasPendientesTotal.toFixed(2)} = Total: $${precioTotal.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`;
             } else {
-                const annualFee = precioTotal - planSeleccionado.precio;
-                return annualFee > 0 
-                    ? `Plan: $${planSeleccionado.precio.toFixed(2)} + Renovación anual: $${annualFee.toFixed(2)} = Total: $${precioTotal.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`
-                    : `Plan: $${planSeleccionado.precio.toFixed(2)}. No se aplica fee anual este año. Si no especificas monto, se tomará el precio completo.`;
+                return `Plan: $${planSeleccionado.precio.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`;
             }
         })()        
         : helperTextMonto || 'Seleccione un plan para ver el precio total';
 </script>
-
-<!-- Checkbox para incluir anualidad -->
-{#if isRenovacion}
-    <div class="w-full space-y-1.5">
-        <label class="flex items-center space-x-2">
-            <input
-                type="checkbox"
-                bind:checked={incluyeAnualidad}
-                class="rounded border-[var(--border)] text-[var(--primary)] focus:ring-[var(--primary)]"
-            />
-            <span class="text-md font-bold text-[var(--letter)]">
-                Incluir cuota de mantenimiento anual {añoRenovacion} ($10.00)
-            </span>
-        </label>
-        <p class="text-sm text-gray-600">
-            La cuota de mantenimiento anual cubre el mantenimiento de máquinas y equipos.
-        </p>
-    </div>
-{/if}
 
 <!-- Información de cuotas pendientes -->
 {#if cuotasPendientes.length > 0}
@@ -121,27 +79,6 @@
             type="select"
             options={planOptions}
             bind:value={form.idPlan}
-            {errors}
-            {touched}
-        />
-        <FormField
-            name="metodoPago"
-            label="Método de pago (Opcional)"
-            type="select"
-            options={metodoPagoOptions}
-            bind:value={form.metodoPago}
-            {errors}
-            {touched}
-        />
-    </FormRow>
-{:else}
-    <FormRow>
-        <FormField
-            name="metodoPago"
-            label="Método de pago (Opcional)"
-            type="select"
-            options={metodoPagoOptions}
-            bind:value={form.metodoPago}
             {errors}
             {touched}
         />
@@ -179,12 +116,12 @@
     {/if}
 </FormRow>
 
-{#if form.metodoPago === 'Transferencia'}
+{#if showReferenceField}
     <FormRow>
         <FormField
             name="referencia"
-            label="Referencia de transferencia"
-            placeholder="Ej: TRF-123456"
+            label="Referencia (Opcional)"
+            placeholder="Ej: TRF-123456, Boleta #123, etc."
             bind:value={form.referencia}
             {errors}
             {touched}
@@ -221,21 +158,10 @@
             <p>
                 Duración: {planSeleccionado.duracionMeses}
                 {planSeleccionado.duracionMeses === 1 ? 'mes' : 'meses'}
-            </p>
-            <div class="mt-2 border-t pt-2">
-                {#if montoDesglose}
-                    <p>Precio del plan: ${montoDesglose.plan.toFixed(2)}</p>
-                    {#if montoDesglose.anualidad > 0}
-                        <p>Cuota anual {añoRenovacion}: ${montoDesglose.anualidad.toFixed(2)}</p>
-                    {/if}
-                    {#if montoDesglose.cuotasPendientes > 0}
-                        <p>Cuotas pendientes: ${montoDesglose.cuotasPendientes.toFixed(2)}</p>
-                    {/if}
-                {:else}
-                    <p>Precio del plan: ${planSeleccionado.precio.toFixed(2)}</p>
-                    {#if incluyeAnualidad || (isRenovacion && precioTotal > planSeleccionado.precio)}
-                        <p>Renovación anual {añoRenovacion}: $10.00</p>
-                    {/if}
+            </p>            <div class="mt-2 border-t pt-2">
+                <p>Precio del plan: ${planSeleccionado.precio.toFixed(2)}</p>
+                {#if cuotasPendientes.length > 0}
+                    <p>Cuotas de mantenimiento pendientes: ${cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0).toFixed(2)}</p>
                 {/if}
                 <p class="font-bold">Total: ${precioTotal.toFixed(2)}</p>
                 <p>Monto a pagar: ${form.monto || precioTotal.toFixed(2)}</p>

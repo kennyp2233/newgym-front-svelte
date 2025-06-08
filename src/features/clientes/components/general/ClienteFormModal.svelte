@@ -169,16 +169,15 @@
 				'pecho',
 				'cintura',
 				'cuello'
-			];
-		} else {
-			// AGREGAMOS LOS NUEVOS CAMPOS DE PAGO AL STEP 3
+			];		} else {
+			// CAMPOS ACTUALIZADOS PARA CUOTA DE MANTENIMIENTO
 			return [
 				'fechaInicio',
 				'monto',
 				'referencia',
 				'observaciones',
-				'incluyeAnualidad',
-				'montoAnualidad'
+				'incluyeCuotaMantenimiento',
+				'observacionesCuota'
 			];
 		}
 	}
@@ -221,16 +220,22 @@
 				inscripcion: {
 					idPlan: parseInt(formData.idPlan as string, 10),
 					fechaInicio: formData.fechaInicio as string,
-					fechaFin: planService.calcularFechaFin(formData.fechaInicio as string, duracionMeses)
-				}, // AGREGAMOS EL OBJETO PAGO CON CAMPOS DE ANUALIDAD
+					fechaFin: planService.calcularFechaFin(formData.fechaInicio as string, duracionMeses)				}, 
+				// ESTRUCTURA ACTUALIZADA SEGÚN DOCUMENTACIÓN DEL BACKEND
 				pago: {
-					monto: formData.monto ? Number(formData.monto) : undefined,
+					monto: Number(formData.monto),
 					referencia: formData.referencia ? String(formData.referencia) : undefined,
-					observaciones: formData.observaciones ? String(formData.observaciones) : undefined,
-					incluyeAnualidad: Boolean(formData.incluyeAnualidad ?? true),
-					montoAnualidad: Boolean(formData.incluyeAnualidad ?? true) ? 10 : 0
+					observaciones: formData.observaciones ? String(formData.observaciones) : undefined
 				}
 			};
+
+			// Agregar cuotaMantenimiento solo si se incluye
+			if (formData.incluyeCuotaMantenimiento) {
+				registro.cuotaMantenimiento = {
+					pagarAhora: true,
+					observaciones: formData.observacionesCuota ? String(formData.observacionesCuota) : undefined
+				};
+			}
 
 			await onSubmit(registro);
 			form.set(defaultClienteFormValues); // Reset form to default values
@@ -254,14 +259,7 @@
 
 	onMount(async () => {
 		planes = await planService.getPlanes();
-		// initialValues are already set in createForm
-		// If clienteToEdit could change reactively and form needs to reset:
-		// $: if (clienteToEdit && isOpen) { // Check isOpen to avoid reset when modal is closed
-		//   const newInitialValues = { ...defaultClienteFormValues, ...clienteToEdit };
-		//   resetForm({ values: newInitialValues as ClienteFormData });
-		// } else if (!clienteToEdit && isOpen) {
-		//   resetForm({ values: defaultClienteFormValues as ClienteFormData });
-		// }
+
 	});
 </script>
 

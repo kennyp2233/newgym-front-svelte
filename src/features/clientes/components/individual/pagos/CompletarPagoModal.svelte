@@ -11,11 +11,11 @@
 	// Importar componentes modulares
 	import { createPagoStore, pagoUtils } from '../../../../pagos/composables/pagoComposables';
 	import PagoResumen from '../../../../pagos/components/PagoResumen.svelte';
-
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let pagosPendientes: PagoDTO[] = [];
 	export let historialPagos: PagoDTO[] = []; // Nueva prop para el historial completo
+	export let preselectedPago: PagoDTO | null = null; // Nuevo: pago preseleccionado desde tabla
 	export let onClose: () => void = () => {};
 	export let onSuccess: () => void = () => {};
 
@@ -25,18 +25,19 @@
 	let isSubmitting = false;
 	let selectedPagoId = '';
 
-	// ✅ INICIALIZAR selectedPagoId cuando cambien los pagos pendientes
-	$: if (pagosPendientes.length > 0 && !selectedPagoId) {
+	// ✅ INICIALIZAR selectedPagoId: prioridad a preselectedPago, luego primer pendiente
+	$: if (preselectedPago) {
+		selectedPagoId = preselectedPago.idPago!.toString();
+	} else if (pagosPendientes.length > 0 && !selectedPagoId) {
 		selectedPagoId = pagosPendientes[0].idPago!.toString();
 	}
-
-	// ✅ OBTENER EL PAGO SELECCIONADO DE FORMA REACTIVA
-	$: selectedPago = pagosPendientes.find((p) => p.idPago!.toString() === selectedPagoId) || null;
+	// ✅ OBTENER EL PAGO SELECCIONADO: prioridad a preselectedPago, luego buscar en pendientes
+	$: selectedPago = preselectedPago || pagosPendientes.find((p) => p.idPago!.toString() === selectedPagoId) || null;
 	
-	// Usar utilidades modulares
+	// Usar utilidades modulares para calculos
 	$: montoRestante = selectedPago ? pagoUtils.calcularMontoRestante(selectedPago, historialPagos) : 0;
-
-	// Función de completar pago usando composable
+	$: montoTotalCompletarPago = selectedPago ? pagoUtils.calcularMontoTotalCompletarPago(selectedPago) : 0;
+	// Función de completar pago usando composable - ACTUALIZADA para manejar arrays de pagos pendientes
 	async function handleCompletarPago() {
 		if (!selectedPago) {
 			toasts.showToast('No hay pago seleccionado', 'error');
@@ -44,11 +45,31 @@
 		}
 
 		isSubmitting = true;
-		const exito = await pagoStore.completarPago(selectedPago.idPago!);
 		
-		if (exito) {
-			onSuccess();
+		// Si hay múltiples pagos pendientes de renovación, manejarlos como array
+		if (Array.isArray(pagosPendientes) && pagosPendientes.length > 1) {
+			// Para renovaciones, completar todos los pagos pendientes relacionados
+			const pagosRenovacion = pagosPendientes.filter(p => p.esRenovacion);
+			
+			if (pagosRenovacion.length > 0) {
+				// Completar el pago seleccionado que puede incluir otros pendientes
+				const exito = await pagoStore.completarPago(selectedPago.idPago!, undefined, pagosRenovacion);
+				if (exito) {
+					onSuccess();
+				}
+			} else {
+				const exito = await pagoStore.completarPago(selectedPago.idPago!);
+				if (exito) {
+					onSuccess();
+				}
+			}
+		} else {
+			const exito = await pagoStore.completarPago(selectedPago.idPago!);
+			if (exito) {
+				onSuccess();
+			}
 		}
+		
 		isSubmitting = false;
 	}
 
@@ -59,13 +80,15 @@
 	}));
 </script>
 
-<BaseModal {isOpen} {onClose} size="md" closeOnClickOutside>
-	<svelte:fragment slot="header">
-		<h3 class="text-lg font-semibold">Completar Pago Pendiente</h3>
+<BaseModal {isOpen} {onClose} size="md" closeOnClickOutside>	<svelte:fragment slot="header">
+		{#if preselectedPago}
+			<h3 class="text-lg font-semibold">Completar Pago</h3>
+		{:else}
+			<h3 class="text-lg font-semibold">Completar Pago Pendiente</h3>
+		{/if}
 	</svelte:fragment>
-
 	<div class="space-y-4">
-		{#if pagosPendientes.length === 0}
+		{#if !preselectedPago && pagosPendientes.length === 0}
 			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
 				<p class="text-sm text-yellow-700">
 					<Icon name="warning" size={16} className="mr-1 inline" />
@@ -73,13 +96,20 @@
 				</p>
 			</div>
 		{:else}
-			<p class="text-sm text-gray-600">
-				Selecciona el pago pendiente que deseas completar para <strong
-					>{cliente.nombre} {cliente.apellido}</strong
-				>:
-			</p>
+			{#if preselectedPago}
+				<p class="text-sm text-gray-600">
+					¿Confirmas que deseas completar este pago de <strong
+						>{cliente.nombre} {cliente.apellido}</strong>?
+				</p>
+			{:else}
+				<p class="text-sm text-gray-600">
+					Selecciona el pago pendiente que deseas completar para <strong
+						>{cliente.nombre} {cliente.apellido}</strong>:
+				</p>
+			{/if}
 
-			<!-- ✅ SELECTOR DE PAGO SI HAY MÚLTIPLES PAGOS PENDIENTES -->			{#if pagosPendientes.length > 1}
+			<!-- ✅ SELECTOR DE PAGO SI HAY MÚLTIPLES PAGOS PENDIENTES Y NO HAY PRESELECCIÓN -->
+			{#if !preselectedPago && pagosPendientes.length > 1}
 				<div class="space-y-2">
 					<label for="pago-selector" class="text-sm font-medium text-gray-700">Pago a completar:</label>
 					<Select
@@ -108,11 +138,10 @@
 		{/if}
 	</div>
 	<svelte:fragment slot="footer">
-		<Button variant="outline" on:click={onClose}>Cancelar</Button>
-		{#if selectedPago}
+		<Button variant="outline" on:click={onClose}>Cancelar</Button>		{#if selectedPago}
 			<Button variant="success" on:click={handleCompletarPago} isLoading={isSubmitting}>
 				<Icon name="check" size={16} className="mr-2" />
-				Completar Pago ({pagoUtils.formatearMonto(montoRestante)})
+				Completar Pago ({pagoUtils.formatearMonto(montoTotalCompletarPago)})
 			</Button>
 		{:else}
 			<Button variant="success" disabled>

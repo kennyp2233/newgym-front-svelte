@@ -7,17 +7,12 @@
 	import { pagoService, type RenovacionPlanDTO, type PagoDTO } from '../../../../pagos/api';
 	import { planService, type Plan } from '../../../../planes/api';
 	import type { Cliente } from '../../../api';
-	import { toasts } from '$lib/stores/toastStore';
-	import { calculateTotalPrice, shouldApplyAnnualFee } from '../../../forms/validation';
-	
-	// Importar componentes modulares de pagos
+	import { toasts } from '$lib/stores/toastStore';	// Importar componentes modulares de pagos
 	import { createPagoStore, createRenovacionValidator, pagoUtils } from '../../../../pagos/composables/pagoComposables';
 	import PagoFormFields from '../../../../pagos/forms/PagoFormFields.svelte';
 	import { nuevoPagoValidationSchema } from '../../../../pagos/forms/validationSchemas';
 	
-	// Importar modular cuotas-mantenimiento
-	import { createCuotaMantenimientoStore, cuotaMantenimientoUtils } from '../../../../cuotas-mantenimiento/composables/cuotaMantenimientoComposables';
-	import CuotaAnualidadField from '../../../../cuotas-mantenimiento/components/CuotaAnualidadField.svelte';
+	// Importar API de cuotas-mantenimiento para verificación
 	import { cuotaMantenimientoService } from '../../../../cuotas-mantenimiento/api';
 
 	export let isOpen = false;
@@ -28,25 +23,22 @@
 	export let onSuccess: () => void = () => {};	// Estados usando composables
 	const pagoStore = createPagoStore(cliente.idCliente);
 	const renovacionValidator = createRenovacionValidator(cliente);
-	const cuotaMantenimientoStore = createCuotaMantenimientoStore(cliente.idCliente);
 	
 	// Destructurar stores para acceso reactivo
 	const { tieneDeudaActiva: pagoStoreState, pagos: pagosStore } = pagoStore;
 	const { puedeRenovar: renovacionState } = renovacionValidator;
-	const { cuotasPendientes, isLoading: cuotasLoading } = cuotaMantenimientoStore;
 	
 	let planes: Plan[] = [];
 	let planSeleccionado: Plan | null = null;
 	let isSubmitting = false;
 	
-	// Estados para cuotas de mantenimiento
-	let incluyeAnualidad: boolean = false;
-	let montoDesglose: { plan: number; anualidad: number; cuotasPendientes: number } | null = null;
-	// Configuración del formulario usando esquema modular
+	// Estados para cuotas de mantenimiento - Nueva lógica
+	let cuotasPendientes: any[] = [];
+	let loadingCuotas = false;	// Configuración del formulario usando esquema modular
 	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			idPlan: planActualId?.toString() || '',
-			metodoPago: '',
+			// metodoPago field removed as per new requirements
 			monto: '',
 			fechaInicio: new Date().toISOString().split('T')[0],
 			referencia: '',
@@ -103,19 +95,18 @@
 			toasts.showToast($renovacionState.mensaje, 'error');
 			return;
 		}
-
-		// CRÍTICO: Verificar cuotas pendientes usando endpoint específico según documentación
+		// CRÍTICO: Verificar cuotas pendientes usando endpoint específico según nueva lógica
 		if (isRenovacion) {
 			try {
 				const cuotasResponse = await cuotaMantenimientoService.tieneCuotasPendientes(cliente.idCliente);
 				if (cuotasResponse.tienePendientes) {
-					const totalCuotasPendientes = $cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
-					const montoMinimo = (planSeleccionado?.precio || 0) + totalCuotasPendientes + (incluyeAnualidad ? 10 : 0);
+					const totalCuotasPendientes = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
 					const montoIngresado = parseFloat($form.monto);
 
-					if (montoIngresado < montoMinimo) {
+					// NUEVA LÓGICA: Primero cubrir anualidad, luego plan
+					if (montoIngresado < totalCuotasPendientes) {
 						toasts.showToast(
-							`Para renovar debe pagar un mínimo de $${montoMinimo.toFixed(2)} (plan + cuotas pendientes${incluyeAnualidad ? ' + anualidad' : ''})`,
+							`Para renovar debe cubrir mínimo la anualidad pendiente: $${totalCuotasPendientes.toFixed(2)}`,
 							'error'
 						);
 						return;
@@ -125,29 +116,24 @@
 				console.error('Error al verificar cuotas pendientes:', error);
 				toasts.showToast('Error al verificar cuotas pendientes', 'error');
 				return;
-			}		}
-
-		isSubmitting = true;
-
+			}
+		}		isSubmitting = true;
 		const exito = await pagoStore.crearPago({
 			idCliente: cliente.idCliente,
 			idPlan: parseInt($form.idPlan),
-			metodoPago: ($form.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta') || undefined,
+			// metodoPago field removed as per new requirements
 			monto: $form.monto ? parseFloat($form.monto.toString()) : undefined,
 			fechaInicio: $form.fechaInicio || undefined,
 			referencia: $form.referencia || undefined,
-			observaciones: $form.observaciones || undefined,
-			// Campos para cuotas de mantenimiento actualizados
-			incluyeAnualidad: incluyeAnualidad,
-			pagaCuotasPendientes: $cuotasPendientes.length > 0,
-			cuotasPorPagar: $cuotasPendientes.length > 0 ? $cuotasPendientes.map(cuota => cuota.idCuota).filter((id): id is number => id !== undefined) : undefined
+			observaciones: $form.observaciones || undefined
+			// El backend maneja automáticamente las cuotas de mantenimiento
 		});
 
 		if (exito) {
 			onSuccess();
 		}
 		isSubmitting = false;
-	}// Cargar datos iniciales usando composables
+	}	// Cargar datos iniciales
 	onMount(async () => {
 		try {
 			const planesData = await planService.getPlanes();
@@ -159,8 +145,9 @@
 			
 			if (isRenovacion) {
 				await renovacionValidator.validarRenovacion();
-			}			// Cargar cuotas de mantenimiento pendientes usando store modular
-			await cuotaMantenimientoStore.cargarCuotas();
+				// Cargar cuotas pendientes para renovaciones
+				await cargarCuotasPendientes();
+			}
 
 			// Si hay un plan actual, seleccionarlo por defecto
 			if (planActualId) {
@@ -172,6 +159,24 @@
 			toasts.showToast('Error al cargar información', 'error');
 		}
 	});
+
+	// Nueva función para cargar cuotas pendientes
+	async function cargarCuotasPendientes() {
+		try {
+			loadingCuotas = true;
+			const response = await cuotaMantenimientoService.tieneCuotasPendientes(cliente.idCliente);
+			if (response.tienePendientes && response.cuotas) {
+				cuotasPendientes = response.cuotas;
+			} else {
+				cuotasPendientes = [];
+			}
+		} catch (error) {
+			console.error('Error al cargar cuotas pendientes:', error);
+			cuotasPendientes = [];
+		} finally {
+			loadingCuotas = false;
+		}
+	}
 	// Calcular año de renovación según documentación
 	function calcularAñoRenovacion(): number {
 		if (!cliente.inscripciones || cliente.inscripciones.length === 0) {
@@ -188,40 +193,24 @@
 
 		return añoInicial + (añoActual - añoInicial) + 1;
 	}
-
 	// Actualizar plan seleccionado cuando cambia el idPlan
 	function handlePlanChange(idPlan: string) {
 		const plan = planes.find((p) => p.idPlan === parseInt(idPlan));
 		planSeleccionado = plan || null;
-	}	// Calcular precio total con renovación anual usando utils - ACTUALIZADO para cuotas pendientes
+	}
+
+	// Nueva función para calcular precio total simplificado
 	function getPrecioTotal(): number {
 		if (!planSeleccionado) return 0;
 		
-		// Si hay desglose disponible, usar ese total
-		if (montoDesglose) {
-			return montoDesglose.plan + montoDesglose.anualidad + montoDesglose.cuotasPendientes;
-		}
-		
-		// Cálculo manual para renovaciones con cuotas pendientes
 		let total = planSeleccionado.precio;
 		
-		// Agregar anualidad si está seleccionada
-		if (incluyeAnualidad) {
-			total += 10;
-		}
-		
 		// Agregar cuotas pendientes si existen
-		if ($cuotasPendientes.length > 0) {
-			total += $cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+		if (cuotasPendientes.length > 0) {
+			total += cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
 		}
 		
 		return total;
-	}
-
-	// Manejar cambio en el checkbox de anualidad
-	function handleAnualidadChange(incluye: boolean) {
-		incluyeAnualidad = incluye;
-		calcularDesglose();
 	}
 
 	// Wrapper para updateField
@@ -230,39 +219,13 @@
 			...current,
 			[field]: value
 		}));
-	}
-
-	// Calcular desglose cuando cambie el plan o la anualidad
-	async function calcularDesglose() {
-		if (!planSeleccionado) {
-			montoDesglose = null;
-			return;
-		}
-
-		try {
-			const resultado = await pagoService.calcularMontoTotalConCuotas(
-				cliente.idCliente,
-				planSeleccionado.idPlan,
-				incluyeAnualidad
-			);
-			montoDesglose = resultado.desglose;
-		} catch (error) {
-			console.warn('Error al calcular desglose:', error);
-			montoDesglose = null;
-		}
-	}
-	$: añoRenovacion = calcularAñoRenovacion();
+	}	$: añoRenovacion = calcularAñoRenovacion();
 	$: caracteresRestantes = 150 - ($form.observaciones?.length || 0);
 	$: precioTotal = getPrecioTotal();
 
 	// Reactivo: actualizar plan seleccionado cuando cambie idPlan en el form
 	$: if ($form.idPlan) {
 		handlePlanChange($form.idPlan);
-	}
-
-	// Reactivo: calcular desglose cuando cambie el plan o la anualidad
-	$: if (planSeleccionado || incluyeAnualidad) {
-		calcularDesglose();
 	}
 </script>
 
@@ -305,17 +268,15 @@
 							proceder con la renovación.
 						</p>
 					</div>
-				{/if}
-
-				<!-- Advertencia sobre cuotas pendientes -->
-				{#if isRenovacion && $cuotasPendientes.length > 0}
+				{/if}				<!-- Advertencia sobre cuotas pendientes -->
+				{#if isRenovacion && cuotasPendientes.length > 0}
 					<div class="rounded-md border border-orange-200 bg-orange-50 p-4">
 						<h4 class="mb-2 font-bold text-orange-800">⚠️ Cuotas de Mantenimiento Pendientes</h4>
 						<p class="text-sm text-orange-700 mb-2">
-							Este cliente tiene <strong>{$cuotasPendientes.length}</strong> cuota{$cuotasPendientes.length > 1 ? 's' : ''} de mantenimiento pendiente{$cuotasPendientes.length > 1 ? 's' : ''}:
+							Este cliente tiene <strong>{cuotasPendientes.length}</strong> cuota{cuotasPendientes.length > 1 ? 's' : ''} de mantenimiento pendiente{cuotasPendientes.length > 1 ? 's' : ''}:
 						</p>
 						<ul class="text-sm text-orange-700 space-y-1">
-							{#each $cuotasPendientes as cuota}
+							{#each cuotasPendientes as cuota}
 								<li class="flex justify-between">
 									<span>• Año {cuota.anio}</span>
 									<span class="font-medium">${cuota.monto.toFixed(2)}</span>
@@ -324,24 +285,13 @@
 						</ul>
 						<div class="mt-2 pt-2 border-t border-orange-200">
 							<p class="text-sm font-medium text-orange-800">
-								Total cuotas pendientes: <span class="font-bold">${$cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0).toFixed(2)}</span>
+								Total cuotas pendientes: <span class="font-bold">${cuotasPendientes.reduce((sum: number, cuota: any) => sum + cuota.monto, 0).toFixed(2)}</span>
 							</p>
 							<p class="text-xs text-orange-600 mt-1">
 								Para renovar se debe incluir el pago de estas cuotas pendientes.
 							</p>
 						</div>
-					</div>
-				{/if}<!-- Componente modular para cuotas de mantenimiento -->
-				<CuotaAnualidadField
-					clienteId={cliente.idCliente}
-					montoPlan={planSeleccionado?.precio || 0}
-					bind:incluyeAnualidad
-					cuotasPendientes={$cuotasPendientes}
-					onAnualidadChange={handleAnualidadChange}
-					updateField={updateFieldWrapper}
-				/>
-
-				<!-- Usar componente modular de formulario -->
+					</div>{/if}				<!-- Usar componente modular de formulario -->
 				<PagoFormFields 
 					bind:form={$form}
 					{planes}
@@ -351,10 +301,7 @@
 					errors={$errors}
 					touched={$touched}
 					{isRenovacion}
-					{añoRenovacion}
-					bind:incluyeAnualidad
-					cuotasPendientes={$cuotasPendientes}
-					{montoDesglose}
+					{cuotasPendientes}
 				/>
 			</div>
 		</form>

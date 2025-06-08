@@ -4,7 +4,6 @@ import type { Writable, Readable } from 'svelte/store';
 import { pagoService, type PagoDTO, type RenovacionPlanDTO } from '../api';
 import { planService, type Plan } from '../../planes/api';
 import type { Cliente } from '../../clientes/api';
-import { calculateTotalPrice } from '../../clientes/forms/validation';
 import { toasts } from '$lib/stores/toastStore';
 
 /**
@@ -18,21 +17,21 @@ export function createPagoStore(clienteId: number) {
     const _tieneDeudaActiva = writable(false);
 
     // Estados derivados
-    const pagosPendientes: Readable<PagoDTO[]> = derived(_pagos, $pagos => 
+    const pagosPendientes: Readable<PagoDTO[]> = derived(_pagos, $pagos =>
         $pagos.filter(pago => pago.estado === 'Pendiente')
     );
-    
-    const pagosCompletados: Readable<PagoDTO[]> = derived(_pagos, $pagos => 
+
+    const pagosCompletados: Readable<PagoDTO[]> = derived(_pagos, $pagos =>
         $pagos.filter(pago => pago.estado === 'Completado')
     );
-    
-    const totalPagado: Readable<number> = derived(_pagos, $pagos => 
+
+    const totalPagado: Readable<number> = derived(_pagos, $pagos =>
         $pagos.reduce((sum, pago) => sum + Number(pago.monto), 0)
     );
-      const tieneDeudaPendiente: Readable<boolean> = derived(pagosPendientes, $pendientes => 
+    const tieneDeudaPendiente: Readable<boolean> = derived(pagosPendientes, $pendientes =>
         $pendientes.length > 0
     );
-    
+
     // Acciones
     async function cargarPagos(): Promise<void> {
         _isLoading.set(true);
@@ -58,10 +57,19 @@ export function createPagoStore(clienteId: number) {
         } catch (error) {
             console.error('Error al verificar deuda activa:', error);
         }
-    }
-
-    async function actualizarPago(pagoId: number, datos: Partial<PagoDTO>): Promise<boolean> {
+    }    async function actualizarPago(pagoId: number, datos: Partial<PagoDTO>): Promise<boolean> {
         try {
+            // Si se está actualizando el monto, calcular el estado correcto
+            if (datos.monto !== undefined) {
+                const pagos = await pagoService.getPagosByCliente(clienteId);
+                const pagoActual = pagos.find(p => p.idPago === pagoId);
+                
+                if (pagoActual) {
+                    // Calcular el estado basado en el nuevo monto
+                    datos.estado = pagoUtils.calcularEstadoPago(datos.monto, pagoActual);
+                }
+            }
+
             const pagoActualizado = await pagoService.updatePago(pagoId, datos);
             if (pagoActualizado) {
                 await cargarPagos(); // Recargar todos los pagos
@@ -83,14 +91,13 @@ export function createPagoStore(clienteId: number) {
                 toasts.showToast('Pago eliminado correctamente', 'success');
                 return true;
             }
-            return false;        } catch (error) {
+            return false;
+        } catch (error) {
             console.error('Error al eliminar pago:', error);
             toasts.showToast('Error al eliminar pago', 'error');
             return false;
         }
-    }
-
-    async function completarPago(pagoId: number, observaciones?: string): Promise<boolean> {
+    } async function completarPago(pagoId: number, observaciones?: string, pagosPendientesAdicionales?: PagoDTO[]): Promise<boolean> {
         try {
             // Obtener pago actual
             const pagos = await pagoService.getPagosByCliente(clienteId);
@@ -99,24 +106,43 @@ export function createPagoStore(clienteId: number) {
                 throw new Error('Pago no encontrado o sin plan asociado');
             }
 
-            // Calcular monto total
-            const precioTotal = calculateTotalPrice(pago.inscripcion.plan.precio, pagos, false);
-            const montoTotal = precioTotal;
+            // Calcular el monto total correcto basado en el pago y sus asociaciones
+            let montoTotal = pago.inscripcion.plan.precio;
 
-            // Actualizar pago
-            const actualizado = await actualizarPago(pagoId, {
-                monto: montoTotal,
-                estado: 'Completado',
-                observaciones: observaciones ? 
-                    `${pago.observaciones || ''}. ${observaciones}` : 
-                    `${pago.observaciones || ''}. Pago completado - Monto anterior: ${pago.monto.toFixed(2)}, Monto final: ${montoTotal.toFixed(2)}`
-            });
-
-            if (actualizado) {
-                toasts.showToast('Pago completado correctamente', 'success');
+            // Si el pago incluye anualidad, agregarla
+            if (pago.incluyeAnualidad && pago.montoAnualidad) {
+                montoTotal += pago.montoAnualidad;
             }
-            
-            return actualizado;
+
+            // Si el pago tiene cuotas de mantenimiento asociadas, agregarlas
+            if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
+                const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
+                montoTotal += montoCuotas;
+            }
+
+            // Si hay pagos pendientes adicionales (para renovaciones con array), incluir sus montos
+            if (pagosPendientesAdicionales && pagosPendientesAdicionales.length > 0) {
+                const montoPendientes = pagosPendientesAdicionales.reduce((sum, pagoPendiente) => {
+                    let montoPago = pagoPendiente.inscripcion?.plan?.precio || 0;
+                    if (pagoPendiente.cuotasMantenimiento) {
+                        montoPago += pagoPendiente.cuotasMantenimiento.reduce((cuotaSum, cuota) => cuotaSum + cuota.monto, 0);
+                    }
+                    return sum + montoPago;
+                }, 0);
+                montoTotal += montoPendientes;
+            }            // Usar el método específico del API para completar pago con monto correcto            // ESTADO MANAGEMENT: El estado del pago se determina automáticamente en el frontend:
+            // - "Pendiente" si el monto no cubre el total esperado
+            // - "Completado" si el monto cubre o excede el total esperado
+            const pagoCompletado = await pagoService.completarPago(pagoId, montoTotal, observaciones);
+
+            if (pagoCompletado) {
+                toasts.showToast('Pago completado correctamente', 'success');
+                await cargarPagos(); // Recargar pagos para reflejar cambios
+                await verificarDeudaActiva(); // Actualizar estado de deuda
+                return true;
+            }
+
+            return false;
         } catch (error) {
             console.error('Error al completar pago:', error);
             toasts.showToast('Error al completar pago', 'error');
@@ -124,19 +150,21 @@ export function createPagoStore(clienteId: number) {
         }
     }    async function crearPago(data: RenovacionPlanDTO): Promise<boolean> {
         try {
-            _isLoading.set(true);
+            _isLoading.set(true);            // ESTADO MANAGEMENT: El estado del pago se determina automáticamente en el frontend:
+            // - "Pendiente" si el monto no cubre el total esperado (plan + cuotas)
+            // - "Completado" si el monto cubre o excede el total esperado
             const response = await pagoService.renovarPlan(data);
 
             // Si hay cuotas por pagar, marcarlas como pagadas
             if (data.cuotasPorPagar && data.cuotasPorPagar.length > 0 && response.datos.pago.idPago) {
                 try {
                     const { cuotaMantenimientoService } = await import('../../cuotas-mantenimiento/api');
-                    
+
                     // Marcar cada cuota como pagada
-                    const promesasCuotas = data.cuotasPorPagar.map(idCuota => 
+                    const promesasCuotas = data.cuotasPorPagar.map(idCuota =>
                         cuotaMantenimientoService.marcarComoPagada(idCuota, response.datos.pago.idPago)
                     );
-                    
+
                     await Promise.all(promesasCuotas);
                     console.log(`✅ Se asociaron ${data.cuotasPorPagar.length} cuota(s) con el pago ${response.datos.pago.idPago}`);
                 } catch (cuotaError) {
@@ -144,19 +172,17 @@ export function createPagoStore(clienteId: number) {
                     // No fallar el proceso completo por este error, pero notificar
                     toasts.showToast('Pago creado pero hubo un problema al asociar las cuotas', 'warning');
                 }
-            }
-
-            // Mostrar mensaje de éxito según el estado del pago
+            }            // Mostrar mensaje de éxito según el estado del pago (determinado automáticamente por el backend)
             if (response.datos.pago.estado === 'Completado') {
                 toasts.showToast('Pago registrado correctamente', 'success');
             } else {
-                toasts.showToast('Pago parcial registrado', 'info');
+                toasts.showToast('Pago parcial registrado. Completar monto restante para finalizar.', 'info');
             }
 
             // Recargar datos
             await cargarPagos();
             await verificarDeudaActiva();
-            
+
             return true;
         } catch (error: any) {
             console.error('Error al crear pago:', error);
@@ -164,7 +190,8 @@ export function createPagoStore(clienteId: number) {
             toasts.showToast(errorMessage, 'error');
             return false;
         } finally {
-            _isLoading.set(false);        }
+            _isLoading.set(false);
+        }
     }
 
     return {
@@ -177,7 +204,7 @@ export function createPagoStore(clienteId: number) {
         tieneDeudaActiva: { subscribe: _tieneDeudaActiva.subscribe },
         isLoading: { subscribe: _isLoading.subscribe },
         lastUpdated: { subscribe: _lastUpdated.subscribe },
-        
+
         // Acciones
         cargarPagos,
         verificarDeudaActiva,
@@ -220,12 +247,73 @@ export function createPlanStore() {
  */
 export const pagoUtils = {
     /**
+     * Calcula el estado que debería tener un pago basado en el monto vs el total esperado
+     */
+    calcularEstadoPago(monto: number, pago: PagoDTO): 'Completado' | 'Pendiente' {
+        if (!pago.inscripcion?.plan) return 'Pendiente';
+
+        // Calcular el monto total esperado para este pago
+        let montoTotalEsperado = pago.inscripcion.plan.precio;
+
+        // Agregar anualidad si está incluida
+        if (pago.incluyeAnualidad && pago.montoAnualidad) {
+            montoTotalEsperado += pago.montoAnualidad;
+        }
+
+        // Agregar cuotas de mantenimiento si están asociadas
+        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
+            const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
+            montoTotalEsperado += montoCuotas;
+        }
+
+        // Si el monto cubre o excede el total esperado, está completado
+        return monto >= montoTotalEsperado ? 'Completado' : 'Pendiente';
+    },
+
+    /**
      * Calcula el monto restante de un pago
      */
     calcularMontoRestante(pago: PagoDTO, historialPagos: PagoDTO[]): number {
         if (!pago.inscripcion?.plan) return 0;
-        const precioTotal = calculateTotalPrice(pago.inscripcion.plan.precio, historialPagos, false);
-        return Math.max(0, precioTotal - pago.monto);
+
+        // Calcular el monto total esperado para este pago
+        let montoTotalEsperado = pago.inscripcion.plan.precio;
+
+        // Agregar anualidad si está incluida
+        if (pago.incluyeAnualidad && pago.montoAnualidad) {
+            montoTotalEsperado += pago.montoAnualidad;
+        }
+
+        // Agregar cuotas de mantenimiento si están asociadas
+        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
+            const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
+            montoTotalEsperado += montoCuotas;
+        }
+
+        // Calcular el monto restante
+        return Math.max(0, montoTotalEsperado - pago.monto);
+    },
+
+    /**
+     * Calcula el monto máximo permitido para un pago considerando todas sus asociaciones
+     */
+    calcularMontoMaximoPermitido(pago: PagoDTO): number {
+        if (!pago.inscripcion?.plan) return 0;
+
+        let montoMaximo = pago.inscripcion.plan.precio;
+
+        // Agregar anualidad si está incluida
+        if (pago.incluyeAnualidad && pago.montoAnualidad) {
+            montoMaximo += pago.montoAnualidad;
+        }
+
+        // Agregar cuotas de mantenimiento si están asociadas
+        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
+            const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
+            montoMaximo += montoCuotas;
+        }
+
+        return montoMaximo;
     },
 
     /**
@@ -272,39 +360,48 @@ export const pagoUtils = {
                 return 'bg-red-100 text-red-800';
             default:
                 return 'bg-gray-100 text-gray-800';
-        }
-    },    /**
-     * Obtiene el color del método de pago
-     */
-    obtenerColorMetodoPago(metodo: string): string {
-        switch (metodo) {
-            case 'Efectivo':
-                return 'bg-green-100 text-green-800';
-            case 'Transferencia':
-                return 'bg-blue-100 text-blue-800';
-            case 'Tarjeta':
-                return 'bg-purple-100 text-purple-800';
-            default:
-                return 'bg-gray-100 text-gray-800';
-        }
-    },
+        }    },
+
+    // metodoPago utility functions removed as per new requirements - payment method no longer tracked
 
     /**
      * Verifica si un pago es el último pago del cliente
      */
     isUltimoPago(pago: PagoDTO, pagos: PagoDTO[]): boolean {
         if (!pago.fechaPago) return false;
-        
+
         // Buscar el pago más reciente
         const pagoMasReciente = pagos.reduce((ultimo, actual) => {
             if (!actual.fechaPago) return ultimo;
             if (!ultimo.fechaPago) return actual;
-            
+
             return new Date(actual.fechaPago) > new Date(ultimo.fechaPago) ? actual : ultimo;
         });
-        
+
         return pagoMasReciente.idPago === pago.idPago;
-    }
+    },
+
+    /**
+     * Calcula el monto total necesario para completar un pago
+     */
+    calcularMontoTotalCompletarPago(pago: PagoDTO): number {
+        if (!pago.inscripcion?.plan) return 0;
+
+        let montoTotal = pago.inscripcion.plan.precio;
+
+        // Agregar anualidad si está incluida
+        if (pago.incluyeAnualidad && pago.montoAnualidad) {
+            montoTotal += pago.montoAnualidad;
+        }
+
+        // Agregar cuotas de mantenimiento si están asociadas
+        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
+            const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
+            montoTotal += montoCuotas;
+        }
+
+        return montoTotal;
+    },
 };
 
 /**
@@ -312,7 +409,7 @@ export const pagoUtils = {
  */
 export function createRenovacionValidator(cliente: Cliente) {
     const _puedeRenovar = writable({ puede: true, mensaje: '', diasRestantes: 0 });
-    const _isValidating = writable(false);    async function validarRenovacion(): Promise<void> {
+    const _isValidating = writable(false); async function validarRenovacion(): Promise<void> {
         _isValidating.set(true);
         try {
             const resultado = await pagoService.puedeRenovarPlan(cliente.idCliente);

@@ -124,9 +124,9 @@ export const Step3Schema = yup.object({
             if (!value) return true;
             const decimal = value.toString().split('.')[1];
             return !decimal || decimal.length <= 2;
-        })        .test('monto-minimo-anualidad', 'Si incluye anualidad, debe pagar el monto completo del plan + $10', function (value) {
-            const incluyeAnualidad = this.parent.incluyeAnualidad;
-            if (!incluyeAnualidad) return true; // Si no incluye anualidad, cualquier monto es válido
+        })        .test('monto-minimo-cuota', 'Si incluye cuota de mantenimiento, debe pagar el monto completo del plan + $10', function (value) {
+            const incluyeCuotaMantenimiento = this.parent.incluyeCuotaMantenimiento;
+            if (!incluyeCuotaMantenimiento) return true; // Si no incluye cuota, cualquier monto es válido
             
             // Esta validación se complementa en el componente con el precio específico del plan
             return Number(value) > 0;
@@ -135,10 +135,9 @@ export const Step3Schema = yup.object({
     observaciones: yup
         .string()
         .max(150, 'Las observaciones no pueden exceder 150 caracteres')
-        .nullable(),
-    // Campos de anualidad actualizados
-    incluyeAnualidad: yup.boolean().default(false), // Por defecto NO incluir anualidad
-    montoAnualidad: yup.number().nullable(),
+        .nullable(),    // Campos de cuota de mantenimiento actualizados
+    incluyeCuotaMantenimiento: yup.boolean().default(false), // Por defecto NO incluir cuota
+    observacionesCuota: yup.string().max(150, 'Las observaciones no pueden exceder 150 caracteres').nullable(),
 });
 
 // Helper para validar monto máximo considerando plan + renovación anual
@@ -194,8 +193,8 @@ export const createStep3SchemaWithPlanValidation = (planes: any[]) => {
                 if (!value) return true;
                 const decimal = value.toString().split('.')[1];
                 return !decimal || decimal.length <= 2;
-            })            .test('monto-reglas-anualidad', 'Monto no válido según las opciones de pago', function (value) {
-                const incluyeAnualidad = this.parent.incluyeAnualidad;
+            })            .test('monto-reglas-cuota', 'Monto no válido según las opciones de pago', function (value) {
+                const incluyeCuotaMantenimiento = this.parent.incluyeCuotaMantenimiento;
                 const planId = this.parent.idPlan;
                 
                 if (!planId || !value) return false;
@@ -205,14 +204,14 @@ export const createStep3SchemaWithPlanValidation = (planes: any[]) => {
                 
                 const monto = Number(value);
                 
-                if (incluyeAnualidad) {
-                    // Si incluye anualidad, debe pagar mínimo $10 (cuota anual)
+                if (incluyeCuotaMantenimiento) {
+                    // Si incluye cuota de mantenimiento, debe pagar mínimo $10 (cuota anual)
                     if (monto < 10) {
-                        return this.createError({ message: 'Con anualidad debe pagar mínimo $10.00 (cuota anual)' });
+                        return this.createError({ message: 'Con cuota de mantenimiento debe pagar mínimo $10.00 (cuota anual)' });
                     }
                     return true;
                 } else {
-                    // Si no incluye anualidad, puede pagar cualquier cantidad positiva
+                    // Si no incluye cuota, puede pagar cualquier cantidad positiva
                     return monto > 0;
                 }
             }),
@@ -220,10 +219,9 @@ export const createStep3SchemaWithPlanValidation = (planes: any[]) => {
         observaciones: yup
             .string()
             .max(150, 'Las observaciones no pueden exceder 150 caracteres')
-            .nullable(),
-        // Nuevos campos para anualidad - por defecto FALSE
-        incluyeAnualidad: yup.boolean().default(false),
-        montoAnualidad: yup.number().nullable(),
+            .nullable(),        // Nuevos campos para cuota de mantenimiento - por defecto FALSE
+        incluyeCuotaMantenimiento: yup.boolean().default(false),
+        observacionesCuota: yup.string().max(150, 'Las observaciones no pueden exceder 150 caracteres').nullable(),
     });
 };
 
@@ -265,10 +263,10 @@ export const defaultClienteFormValues: ClienteFormData = {
     fechaInicio: new Date().toISOString().split('T')[0],
     // CAMPOS DE PAGO
     monto: null,
-    referencia: null,
-    observaciones: null,    // NUEVOS CAMPOS DE ANUALIDAD - POR DEFECTO FALSE
-    incluyeAnualidad: false,
-    montoAnualidad: null,
+    referencia: null,    observaciones: null,
+    // NUEVOS CAMPOS DE CUOTA DE MANTENIMIENTO - POR DEFECTO FALSE
+    incluyeCuotaMantenimiento: false,
+    observacionesCuota: null,
 };
 
 // Esquema específico para edición de información personal del cliente

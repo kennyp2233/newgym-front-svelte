@@ -7,7 +7,7 @@ import type { Plan } from '../../planes/api';
  */
 export const nuevoPagoValidationSchema = yup.object({
     idPlan: yup.string().required('Debe seleccionar un plan'),
-    metodoPago: yup.string().nullable(),
+    // metodoPago field removed as per new requirements
     monto: yup
         .number()
         .nullable()
@@ -18,14 +18,7 @@ export const nuevoPagoValidationSchema = yup.object({
             return !decimal || decimal.length <= 2;
         }),
     fechaInicio: yup.string().nullable(),
-    referencia: yup
-        .string()
-        .nullable()
-        .when('metodoPago', {
-            is: 'Transferencia',
-            then: (schema) => schema.required('La referencia es requerida para transferencias'),
-            otherwise: (schema) => schema.notRequired()
-        }),
+    referencia: yup.string().nullable(),
     observaciones: yup
         .string()
         .max(150, 'Las observaciones no pueden exceder 150 caracteres')
@@ -44,8 +37,8 @@ export const editarPagoValidationSchema = yup.object({
             const decimal = value.toString().split('.')[1];
             return !decimal || decimal.length <= 2;
         }),
-    metodoPago: yup.string().nullable(),
-    estado: yup.string().required('El estado es requerido'),
+    // metodoPago field removed as per new requirements
+    // estado field removed - calculated automatically by backend based on payment amount
     referencia: yup.string().nullable(),
     observaciones: yup
         .string()
@@ -78,3 +71,27 @@ export function createDynamicValidationSchema(planes: Plan[], includeMaxAmountTe
         })
     );
 }
+
+/**
+ * Crea un esquema de validación dinámico para editar pago con validación de monto máximo
+ */
+export const createEditarPagoValidationSchema = (montoMaximo: number) => {
+    return yup.object({
+        monto: yup.number()
+            .required('El monto es requerido')
+            .min(1, 'El monto debe ser mayor a $1.00')
+            .max(montoMaximo, `El monto no puede exceder $${montoMaximo.toFixed(2)}`)
+            .test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
+                if (!value) return true;
+                const decimal = value.toString().split('.')[1];
+                return !decimal || decimal.length <= 2;
+            }),
+        // metodoPago field removed as per new requirements
+        // estado field removed - calculated automatically by backend based on payment amount
+        referencia: yup.string().nullable(),
+        observaciones: yup
+            .string()
+            .max(150, 'Las observaciones no pueden exceder 150 caracteres')
+            .nullable()
+    });
+};

@@ -9,34 +9,37 @@
 	import type { PagoDTO } from '../../../../pagos/api';
 	import { pagoService } from '../../../../pagos/api';
 	import type { Cliente } from '../../../api';
-	import { toasts } from '$lib/stores/toastStore';
-	// Importar componentes modulares
-	import { createPagoStore, pagoUtils } from '../../../../pagos/composables/pagoComposables';
-	import { editarPagoValidationSchema } from '../../../../pagos/forms/validationSchemas';
+	import { toasts } from '$lib/stores/toastStore'; // Importar componentes modulares	import { createPagoStore, pagoUtils } from '../../../../pagos/composables/pagoComposables';
+	import {
+		editarPagoValidationSchema,
+		createEditarPagoValidationSchema
+	} from '../../../../pagos/forms/validationSchemas';
 	import PagoResumen from '../../../../pagos/components/PagoResumen.svelte';
 	import PagoEstadoChip from '../../../../pagos/components/PagoEstadoChip.svelte';
-	import MetodoPagoChip from '../../../../pagos/components/MetodoPagoChip.svelte';
+	import { createPagoStore, pagoUtils } from '../../../../pagos/composables/pagoComposables';
+	// MetodoPagoChip removed as per new requirements - payment method no longer tracked
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let pago: PagoDTO;
 	export let canEdit = true; // Nueva prop para controlar si se puede editar
 	export let onClose: () => void = () => {};
-	export let onSuccess: () => void = () => {};
-	export let cuotasPendientesGlobales: any[] = []; // NUEVO: Para identificación mejorada// Estados usando composable
+	export let onSuccess: () => void = () => {}; // Estados usando composable
 	const pagoStore = createPagoStore(cliente.idCliente);
-	// Alias para la validación
-	const validationSchema = editarPagoValidationSchema;
+
+	// Calcular monto máximo permitido para este pago
+	$: montoMaximoPermitido = pagoUtils.calcularMontoMaximoPermitido(pago);
+
+	// Alias para la validación con monto máximo dinámico
+	$: validationSchema = createEditarPagoValidationSchema(montoMaximoPermitido);
 
 	let isEditing = false;
 	let isSubmitting = false;
-	let showDeleteConfirm = false;
-
-	// Configuración del formulario con valores iniciales del pago
+	let showDeleteConfirm = false; // Configuración del formulario con valores iniciales del pago
 	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			monto: pago.monto.toString(),
-			metodoPago: pago.metodoPago || '',
-			estado: pago.estado || 'Completado',
+			// metodoPago field removed as per new requirements
+			// estado field removed - backend calculates state automatically
 			referencia: pago.referencia || '',
 			observaciones: pago.observaciones || ''
 		},
@@ -90,27 +93,25 @@
 		if (!isValid) {
 			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
 			return;
-		}
-		// Validación adicional para pagos con anualidad según documentación estricta
+		} // Validación adicional para pagos con cuotas de mantenimiento
 		if (pagoService.identificarPagoConCuotas(pago)) {
 			const montoIngresado = parseFloat($form.monto);
 			const montoPlan = pago.inscripcion?.plan?.precio || 0;
 
+			// Solo se puede editar el monto del plan, las cuotas no se pueden modificar
 			if (montoIngresado < montoPlan) {
 				toasts.showToast(
-					`El monto del plan no puede ser menor a $${montoPlan.toFixed(2)}`,
+					`El monto del plan no puede ser menor a $${montoPlan.toFixed(2)}. Las cuotas de mantenimiento no se pueden modificar.`,
 					'error'
 				);
 				return;
 			}
 		}
-
 		isSubmitting = true;
-		try {
-			const pagoData = {
+		try {			const pagoData = {
 				monto: parseFloat($form.monto),
-				metodoPago: $form.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta' | undefined,
-				estado: $form.estado as 'Completado' | 'Pendiente' | 'Anulado',
+				// metodoPago field removed as per new requirements
+				// estado field calculated automatically by frontend logic based on payment amount vs expected total
 				referencia: $form.referencia || undefined,
 				observaciones: $form.observaciones || undefined
 			};
@@ -144,14 +145,13 @@
 			showDeleteConfirm = false;
 		}
 	}
-
 	function toggleEdit() {
 		isEditing = !isEditing;
 		if (!isEditing) {
 			// Resetear valores del formulario usando el wrapper
 			updateFieldWrapper('monto', pago.monto.toString());
-			updateFieldWrapper('metodoPago', pago.metodoPago || '');
-			updateFieldWrapper('estado', pago.estado || 'Completado');
+			// metodoPago field removed as per new requirements
+			// estado field removed - backend calculates state automatically
 			updateFieldWrapper('referencia', pago.referencia || '');
 			updateFieldWrapper('observaciones', pago.observaciones || '');
 		}
@@ -180,70 +180,51 @@
 			<div class="space-y-4">
 				<p class="mb-4 text-sm text-gray-600">
 					Editar pago de <strong>{cliente.nombre} {cliente.apellido}</strong>
-				</p>				<!-- Advertencia sobre restricciones de edición para pagos con anualidad según documentación -->
-				{#if pagoService.identificarPagoConCuotas(pago, cuotasPendientesGlobales)}
+				</p>
+				<!-- Advertencia sobre restricciones de edición para pagos con cuotas de mantenimiento -->
+				{#if pagoService.identificarPagoConCuotas(pago)}
 					<div class="rounded-md border border-yellow-200 bg-yellow-50 p-4">
-						<h4 class="mb-2 font-bold text-yellow-800">ℹ️ Pago con Cuota de Mantenimiento</h4>
+						<h4 class="mb-2 font-bold text-yellow-800">ℹ️ Pago con Cuotas de Mantenimiento</h4>
 						<p class="mb-2 text-sm text-yellow-700">
-							Este pago incluye cuota de mantenimiento anual.
+							Este pago tiene cuotas de mantenimiento adjuntas. Solo puedes editar el monto pagado
+							por el plan.
 						</p>
-						<div class="text-sm text-yellow-600">
-							<p><strong>Plan:</strong> ${(pago.inscripcion?.plan?.precio || 0).toFixed(2)}</p>
-							<p>
-								<strong>Cuota anual:</strong> ${(pago.montoAnualidad || 0).toFixed(2)} (no editable)
-							</p>
-							<p><strong>Formato del monto:</strong> {pagoService.formatearPagoConCuotas(pago)}</p>
-						</div>
+						{#if pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0}
+							<div class="text-sm text-yellow-600">
+								<p><strong>Plan:</strong> ${(pago.inscripcion?.plan?.precio || 0).toFixed(2)}</p>
+								<p>
+									<strong>Cuotas de mantenimiento:</strong> ${pago.cuotasMantenimiento
+										.reduce((sum, cuota) => sum + cuota.monto, 0)
+										.toFixed(2)} (no editable)
+								</p>
+							</div>
+						{/if}
 						<p class="mt-2 text-xs text-yellow-600">
-							Solo puedes editar el costo del plan, no la cuota de mantenimiento.
+							Las cuotas de mantenimiento no se pueden modificar en este pago.
 						</p>
 					</div>
 				{/if}
-
-				<FormRow>					<FormField
+				<FormRow>
+					<FormField
 						name="monto"
-						label={pagoService.identificarPagoConCuotas(pago, cuotasPendientesGlobales) ? 'Monto del Plan (editable)' : 'Monto'}
+						label={pagoService.identificarPagoConCuotas(pago)
+							? 'Monto del Plan (editable)'
+							: 'Monto'}
 						type="number"
 						placeholder="0.00"
 						unit="$"
 						step="0.01"
-						helperText={pagoService.identificarPagoConCuotas(pago, cuotasPendientesGlobales)
-							? `Cuota anual fija: $${(pago.montoAnualidad || 0).toFixed(2)}`
+						helperText={pagoService.identificarPagoConCuotas(pago)
+							? `Las cuotas de mantenimiento no se pueden modificar`
 							: undefined}
 						bind:value={$form.monto}
 						errors={$errors}
 						touched={$touched}
 					/>
-					<FormField
-						name="metodoPago"
-						label="Método de pago"
-						type="select"
-						options={[
-							{ value: '', label: 'No especificado' },
-							{ value: 'Efectivo', label: 'Efectivo' },
-							{ value: 'Transferencia', label: 'Transferencia' },
-							{ value: 'Tarjeta', label: 'Tarjeta de crédito/débito' }
-						]}
-						bind:value={$form.metodoPago}
-						errors={$errors}
-						touched={$touched}
-					/>
+					<!-- metodoPago field removed as per new requirements -->
+					<div></div>
 				</FormRow>
-
 				<FormRow>
-					<FormField
-						name="estado"
-						label="Estado"
-						type="select"
-						options={[
-							{ value: 'Pendiente', label: 'Pendiente' },
-							{ value: 'Completado', label: 'Completado' },
-							{ value: 'Anulado', label: 'Anulado' }
-						]}
-						bind:value={$form.estado}
-						errors={$errors}
-						touched={$touched}
-					/>
 					<FormField
 						name="referencia"
 						label="Referencia"
@@ -252,6 +233,8 @@
 						errors={$errors}
 						touched={$touched}
 					/>
+					<!-- Estado field removed - backend calculates state automatically based on payment amount -->
+					<div></div>
 				</FormRow>
 
 				<div class="w-full space-y-1.5">
