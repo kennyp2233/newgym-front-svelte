@@ -44,57 +44,52 @@
 	} = renovacionManager;
 	const { form, errors, touched, validateForm, updateFieldWrapper, caracteresRestantes } =
 		formManager;
-
-	let isSubmitting = false; // Función de submit para renovación de membresía
+	let isSubmitting = false; 	// Submit form - simplified payment processing
 	async function handleSubmitForm() {
-		const isValid = await validateForm($cuotasPendientes, $planes);
-		if (!isValid) {
+		if (!await validateForm($cuotasPendientes, $planes)) {
 			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
 			return;
 		}
 
-		// Verificar deuda activa usando composable
-		if ($pagoStoreState) {
-			toasts.showToast(
-				'No se puede renovar la membresía mientras haya deuda pendiente. Complete el pago anterior primero.',
-				'error'
-			);
+		if (resumenPago?.error) {
+			toasts.showToast(resumenPago.mensaje, 'error');
 			return;
 		}
 
-		// Verificar renovación usando composable
+		if ($pagoStoreState) {
+			toasts.showToast('Complete el pago pendiente antes de renovar.', 'error');
+			return;
+		}
+
 		if (!$renovacionState.puede) {
 			toasts.showToast($renovacionState.mensaje, 'error');
 			return;
 		}
 
+		if (!resumenPago) {
+			toasts.showToast('Error en el cálculo del pago.', 'error');
+			return;
+		}
+
 		isSubmitting = true;
-		const montoFinal = $form.monto ? parseFloat($form.monto.toString()) : $precioTotal;
-
-		// Determinar si hay cuotas pendientes y cuáles pagar
-		const tieneCuotasPendientes = $cuotasPendientes.length > 0;
-		const cuotasPorPagar = tieneCuotasPendientes
-			? $cuotasPendientes.map((c) => c.idCuota || c.anio)
-			: undefined;
-
+		
 		const exito = await pagoStore.crearPago({
 			idCliente: cliente.idCliente,
 			idPlan: parseInt($form.idPlan),
-			monto: montoFinal,
+			monto: resumenPago.montoAlPlan || 0,
+			montoCuotaMantenimiento: resumenPago.montoACuotas || 0,
 			fechaInicio: $form.fechaInicio || undefined,
 			referencia: $form.referencia || undefined,
-			observaciones: $form.observaciones || undefined,
-			// Configuración para cuotas de mantenimiento
-			pagaCuotasPendientes: tieneCuotasPendientes,
-			cuotasPorPagar: cuotasPorPagar
+			observaciones: $form.observaciones || undefined
 		});
+		
 		if (exito) {
-			toasts.showToast('Membresía renovada exitosamente', 'success');
 			onSuccess();
-			onClose(); // Cerrar el modal después del éxito
+			onClose();
 		}
+		
 		isSubmitting = false;
-	} // Cargar datos iniciales
+	}// Cargar datos iniciales
 	onMount(async () => {
 		try {
 			// Cargar datos usando el manager de renovación
@@ -116,25 +111,51 @@
 			toasts.showToast('Error al cargar información', 'error');
 		}
 	});
-
 	// Actualizar plan seleccionado cuando cambia el idPlan
 	function handlePlanChange(idPlan: string) {
 		renovacionManager.seleccionarPlan(idPlan);
 
-		// Automáticamente establecer el monto total al seleccionar un plan
-		if ($precioTotal > 0) {
+		// Solo establecer el monto total si el campo está vacío o es la primera vez
+		if ($precioTotal > 0 && (!$form.monto || $form.monto === '')) {
 			updateFieldWrapper('monto', $precioTotal.toString());
 		}
 	}
-
 	// Reactivos para mantener sincronización
 	$: if ($form.idPlan) {
 		handlePlanChange($form.idPlan);
 	}
-
+	
+	// Solo establecer monto inicial si no hay monto y hay precio total
 	$: if ($precioTotal > 0 && !$form.monto) {
 		updateFieldWrapper('monto', $precioTotal.toString());
-	}
+	}	// Calculate payment breakdown
+	$: resumenPago = (() => {
+		if (!$form.monto || !$planSeleccionado) return null;
+		
+		const montoUsuario = parseFloat($form.monto.toString()) || 0;
+		if (montoUsuario <= 0) return null;
+		
+		const precioPlan = $planSeleccionado.precio;
+		const cuotasTotal = $cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+		
+		if (cuotasTotal > 0 && montoUsuario < cuotasTotal) {
+			return {
+				error: true,
+				mensaje: `Monto insuficiente. Las cuotas ($${cuotasTotal.toFixed(2)}) son obligatorias.`,
+				montoMinimoRequerido: cuotasTotal
+			};
+		}
+		
+		const montoACuotas = cuotasTotal;
+		const montoAlPlan = Math.min(montoUsuario - cuotasTotal, precioPlan);
+		
+		return {
+			montoAlPlan,
+			montoACuotas,
+			montoTotal: montoAlPlan + montoACuotas,
+			esPagoParcial: montoAlPlan < precioPlan
+		};
+	})();
 </script>
 
 <BaseModal {isOpen} {onClose} size="lg" closeOnClickOutside={false}>
@@ -167,11 +188,42 @@
 						caracteresRestantes={$caracteresRestantes}
 						errors={$errors}
 						touched={$touched}
-						isRenovacion={true}
-						cuotasPendientes={$cuotasPendientes}
-						helperTextMonto={`Monto total requerido: $${$precioTotal.toFixed(2)} (Plan: $${$planSeleccionado?.precio.toFixed(2) || '0.00'}${$cuotasPendientes.length > 0 ? ` + Cuotas pendientes: $${getTotalCuotasPendientes($cuotasPendientes).toFixed(2)}` : ''}). Mínimo: $${$montoMinimo.toFixed(2)}`}
-					/>
-				</div>
+						isRenovacion={true}						cuotasPendientes={$cuotasPendientes}
+						helperTextMonto={$cuotasPendientes.length > 0 
+							? `Plan: $${$planSeleccionado?.precio.toFixed(2) || '0.00'} + Cuotas: $${getTotalCuotasPendientes($cuotasPendientes).toFixed(2)} = Total: $${$precioTotal.toFixed(2)}` 
+							: `Plan: $${$planSeleccionado?.precio.toFixed(2) || '0.00'} (pagos parciales permitidos)`}					/>
+				</div>				<!-- Payment summary -->
+				{#if resumenPago && $form.monto && parseFloat($form.monto.toString()) > 0}
+					{#if resumenPago.error}
+						<div class="rounded-md border border-red-200 bg-red-50 p-3 text-sm">
+							<p class="font-medium text-red-800">❌ {resumenPago.mensaje}</p>
+							<p class="text-xs text-red-700">Mínimo requerido: $${resumenPago.montoMinimoRequerido.toFixed(2)}</p>
+						</div>
+					{:else}
+						<div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
+							<h4 class="font-medium text-blue-800">Resumen del pago:</h4>							<div class="mt-2 space-y-1 text-blue-700">
+								<div class="flex justify-between">
+									<span>Plan {resumenPago.esPagoParcial ? '(Parcial)' : '(Completo)'}:</span>
+									<span class="font-medium">${(resumenPago.montoAlPlan || 0).toFixed(2)}</span>
+								</div>
+								{#if (resumenPago.montoACuotas || 0) > 0}
+								<div class="flex justify-between">
+									<span>Cuotas:</span>
+									<span class="font-medium">${(resumenPago.montoACuotas || 0).toFixed(2)}</span>
+								</div>
+								{/if}
+								<div class="flex justify-between border-t border-blue-300 pt-1 font-bold">
+									<span>Total:</span>
+									<span>${(resumenPago.montoTotal || 0).toFixed(2)}</span>
+								</div>
+								{#if resumenPago.esPagoParcial}
+								<p class="text-xs text-amber-700">⚠️ Pago parcial: Estado será "Pendiente"</p>
+								{/if}
+							</div>
+						</div>
+					{/if}
+				{/if}
+				
 				<!-- Componente de resumen -->
 				<RenovacionResumen
 					planSeleccionado={$planSeleccionado}
@@ -181,12 +233,18 @@
 				/>
 			</div>
 		</form>
-	{/if}<svelte:fragment slot="footer">
+	{/if}	<svelte:fragment slot="footer">
 		{#if $pagoStoreState || !$renovacionState.puede}
 			<Button variant="primary" on:click={onClose}>Entendido</Button>
 		{:else}
 			<Button variant="outline" on:click={onClose} type="button">Cancelar</Button>
-			<Button variant="primary" on:click={handleSubmitForm} type="button" isLoading={isSubmitting}>
+			<Button 
+				variant="primary" 
+				on:click={handleSubmitForm} 
+				type="button" 
+				isLoading={isSubmitting}
+				disabled={resumenPago?.error === true}
+			>
 				Renovar Membresía
 			</Button>
 		{/if}

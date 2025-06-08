@@ -150,33 +150,23 @@ export function createPagoStore(clienteId: number) {
         }
     }    async function crearPago(data: RenovacionPlanDTO): Promise<boolean> {
         try {
-            _isLoading.set(true);            // ESTADO MANAGEMENT: El estado del pago se determina automáticamente en el frontend:
-            // - "Pendiente" si el monto no cubre el total esperado (plan + cuotas)
-            // - "Completado" si el monto cubre o excede el total esperado
+            _isLoading.set(true);
+            
+            console.log('Creando pago con datos:', data);
+            
+            // Llamar al servicio de renovación según la nueva estructura
             const response = await pagoService.renovarPlan(data);
 
-            // Si hay cuotas por pagar, marcarlas como pagadas
-            if (data.cuotasPorPagar && data.cuotasPorPagar.length > 0 && response.datos.pago.idPago) {
-                try {
-                    const { cuotaMantenimientoService } = await import('../../cuotas-mantenimiento/api');
+            console.log('Respuesta del servidor:', response);
 
-                    // Marcar cada cuota como pagada
-                    const promesasCuotas = data.cuotasPorPagar.map(idCuota =>
-                        cuotaMantenimientoService.marcarComoPagada(idCuota, response.datos.pago.idPago)
-                    );
-
-                    await Promise.all(promesasCuotas);
-                    console.log(`✅ Se asociaron ${data.cuotasPorPagar.length} cuota(s) con el pago ${response.datos.pago.idPago}`);
-                } catch (cuotaError) {
-                    console.error('Error al asociar cuotas con el pago:', cuotaError);
-                    // No fallar el proceso completo por este error, pero notificar
-                    toasts.showToast('Pago creado pero hubo un problema al asociar las cuotas', 'warning');
-                }
-            }            // Mostrar mensaje de éxito según el estado del pago (determinado automáticamente por el backend)
-            if (response.datos.pago.estado === 'Completado') {
-                toasts.showToast('Pago registrado correctamente', 'success');
+            // Mostrar mensaje de éxito según la respuesta
+            if (response.datos.pago.incluyeCuotaMantenimiento) {
+                const mensaje = response.datos.cuotaAsociada 
+                    ? `Plan renovado con éxito. Se pagó la cuota de mantenimiento ${response.datos.cuotaAsociada.anio}.`
+                    : 'Plan renovado con éxito.';
+                toasts.showToast(mensaje, 'success');
             } else {
-                toasts.showToast('Pago parcial registrado. Completar monto restante para finalizar.', 'info');
+                toasts.showToast('Plan renovado con éxito', 'success');
             }
 
             // Recargar datos
@@ -245,54 +235,66 @@ export function createPlanStore() {
 /**
  * Utilidades para cálculos de pagos
  */
-export const pagoUtils = {
-    /**
+export const pagoUtils = {    /**
      * Calcula el estado que debería tener un pago basado en el monto vs el total esperado
+     * CORREGIDO: Solo considera el monto del plan para determinar si está completado.
+     * Las cuotas de mantenimiento se manejan por separado y no afectan el estado del pago del plan.
      */
     calcularEstadoPago(monto: number, pago: PagoDTO): 'Completado' | 'Pendiente' {
         if (!pago.inscripcion?.plan) return 'Pendiente';
 
-        // Calcular el monto total esperado para este pago
-        let montoTotalEsperado = pago.inscripcion.plan.precio;
+        // CRÍTICO: Solo considerar el precio del plan para determinar el estado
+        // Las cuotas de mantenimiento son pagos separados manejados por el backend
+        let montoEsperadoDelPlan = pago.inscripcion.plan.precio;
 
-        // Agregar anualidad si está incluida
+        // Agregar anualidad si está incluida (esto sí afecta el estado del pago del plan)
         if (pago.incluyeAnualidad && pago.montoAnualidad) {
-            montoTotalEsperado += pago.montoAnualidad;
+            montoEsperadoDelPlan += pago.montoAnualidad;
         }
 
-        // Agregar cuotas de mantenimiento si están asociadas
+        // NO agregar cuotas de mantenimiento - estas son pagos separados
+        // y no deben afectar el estado de completado del pago del plan
+
+        // Para pagos con cuotas de mantenimiento, calcular solo la parte del plan
+        let montoDelPlan = monto;
         if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
             const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
-            montoTotalEsperado += montoCuotas;
+            // Restar las cuotas del monto total para obtener solo la parte del plan
+            montoDelPlan = Math.max(0, monto - montoCuotas);
         }
 
-        // Si el monto cubre o excede el total esperado, está completado
-        return monto >= montoTotalEsperado ? 'Completado' : 'Pendiente';
-    },
-
-    /**
+        // Un pago está completado cuando el monto del plan cubre o excede el precio del plan
+        return montoDelPlan >= montoEsperadoDelPlan ? 'Completado' : 'Pendiente';
+    },    /**
      * Calcula el monto restante de un pago
+     * CRÍTICO: Solo considera el precio del plan + anualidad para el cálculo.
+     * Las cuotas de mantenimiento son pagos separados manejados por el backend.
      */
     calcularMontoRestante(pago: PagoDTO, historialPagos: PagoDTO[]): number {
         if (!pago.inscripcion?.plan) return 0;
 
-        // Calcular el monto total esperado para este pago
-        let montoTotalEsperado = pago.inscripcion.plan.precio;
+        // Calcular el monto esperado del plan (sin incluir cuotas de mantenimiento)
+        let montoEsperadoDelPlan = pago.inscripcion.plan.precio;
 
-        // Agregar anualidad si está incluida
+        // Agregar anualidad si está incluida (esto sí afecta el pago del plan)
         if (pago.incluyeAnualidad && pago.montoAnualidad) {
-            montoTotalEsperado += pago.montoAnualidad;
+            montoEsperadoDelPlan += pago.montoAnualidad;
         }
 
-        // Agregar cuotas de mantenimiento si están asociadas
+        // NO agregar cuotas de mantenimiento - estas son pagos separados
+        // y no deben afectar el monto restante del pago del plan
+
+        // Para pagos con cuotas de mantenimiento, calcular solo la parte del plan
+        let montoDelPlan = pago.monto;
         if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
             const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
-            montoTotalEsperado += montoCuotas;
+            // Restar las cuotas del monto total para obtener solo la parte del plan
+            montoDelPlan = Math.max(0, pago.monto - montoCuotas);
         }
 
-        // Calcular el monto restante
-        return Math.max(0, montoTotalEsperado - pago.monto);
-    },    /**
+        // Calcular el monto restante solo considerando el plan
+        return Math.max(0, montoEsperadoDelPlan - montoDelPlan);
+    },/**
      * Calcula el monto máximo permitido para un pago considerando todas sus asociaciones
      * Para pagos con cuotas de mantenimiento, solo permite editar el monto del plan
      */
@@ -379,28 +381,26 @@ export const pagoUtils = {
         });
 
         return pagoMasReciente.idPago === pago.idPago;
-    },
-
-    /**
+    },    /**
      * Calcula el monto total necesario para completar un pago
+     * CRÍTICO: Solo considera el precio del plan + anualidad para el cálculo.
+     * Las cuotas de mantenimiento son pagos separados manejados por el backend.
      */
     calcularMontoTotalCompletarPago(pago: PagoDTO): number {
         if (!pago.inscripcion?.plan) return 0;
 
-        let montoTotal = pago.inscripcion.plan.precio;
+        // Calcular el monto esperado del plan (sin incluir cuotas de mantenimiento)
+        let montoEsperadoDelPlan = pago.inscripcion.plan.precio;
 
-        // Agregar anualidad si está incluida
+        // Agregar anualidad si está incluida (esto sí afecta el pago del plan)
         if (pago.incluyeAnualidad && pago.montoAnualidad) {
-            montoTotal += pago.montoAnualidad;
+            montoEsperadoDelPlan += pago.montoAnualidad;
         }
 
-        // Agregar cuotas de mantenimiento si están asociadas
-        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
-            const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
-            montoTotal += montoCuotas;
-        }
+        // NO agregar cuotas de mantenimiento - estas son pagos separados
+        // y no deben afectar el monto total necesario para completar el pago del plan
 
-        return montoTotal;
+        return montoEsperadoDelPlan;
     },
 };
 

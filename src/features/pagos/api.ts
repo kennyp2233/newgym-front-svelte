@@ -52,60 +52,42 @@ export interface PagoDTO {
 export interface RenovacionPlanDTO {
     idCliente: number;
     idPlan: number;
-    metodoPago?: 'Efectivo' | 'Transferencia' | 'Tarjeta'; // DEPRECATED: Payment method no longer tracked in new payments
-    monto?: number;
+    monto: number; // Monto del plan (sin incluir cuotas)
+    montoCuotaMantenimiento: number; // Monto específico de cuotas de mantenimiento
     fechaInicio?: string;
     referencia?: string;
     observaciones?: string;
-
-    // Campos para cuotas de mantenimiento
-    incluyeAnualidad?: boolean;
-    pagaCuotasPendientes?: boolean;
-    cuotasPorPagar?: number[];
 }
 
 export interface RenovacionResponse {
     mensaje: string;
     datos: {
-        cliente: {
-            idCliente: number;
-            nombre: string;
-            apellido: string;
-            cedula: string;
-        };
-        inscripcion: {
-            idInscripcion: number;
-            fechaInicio: string;
-            fechaFin: string;
-        };
-        plan: {
-            idPlan: number;
-            nombre: string;
-            duracionMeses: number;
-            precio: number;
-        }; pago: {
-            idPago: number;
+        pago: {
             monto: number;
-            fechaPago: string;
-            metodoPago: string; // Backend still returns this for backwards compatibility
-            estado: string;
+            montoCuotaMantenimiento: number;
+            montoTotal: number;
+            incluyeCuotaMantenimiento: boolean;
         };
+        cuotaAsociada?: {
+            idCuota: number;
+            anio: number;
+            monto: number;
+        } | null;
     };
 }
 
-class PagoService {
-    // Renovar plan de un cliente - ACTUALIZADO según documentación
+class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según documentación
     async renovarPlan(renovacionData: RenovacionPlanDTO): Promise<RenovacionResponse> {
         try {
-            // Verificar cuotas pendientes antes de renovar
-            const { cuotaMantenimientoService } = await import('../cuotas-mantenimiento/api');
-            const cuotasPendientes = await cuotaMantenimientoService.getCuotasPendientes(renovacionData.idCliente);
-
-            // Si hay cuotas pendientes, agregarlas al payload
-            if (cuotasPendientes.length > 0 && !renovacionData.pagaCuotasPendientes) {
-                const totalCuotasPendientes = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
-                console.warn(`Cliente tiene ${cuotasPendientes.length} cuotas pendientes por $${totalCuotasPendientes.toFixed(2)}`);
-            }
+            console.log('Enviando datos de renovación:', {
+                idCliente: renovacionData.idCliente,
+                idPlan: renovacionData.idPlan,
+                monto: renovacionData.monto,
+                montoCuotaMantenimiento: renovacionData.montoCuotaMantenimiento,
+                fechaInicio: renovacionData.fechaInicio,
+                referencia: renovacionData.referencia,
+                observaciones: renovacionData.observaciones
+            });
 
             const response = await api.post('/pagos/renovar', renovacionData);
             return response.data;

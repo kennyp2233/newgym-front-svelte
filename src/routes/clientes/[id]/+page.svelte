@@ -2,31 +2,32 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';	import DashboardLayout from '$lib/components/layouts/DashboardLayout.svelte';
+	import { onMount } from 'svelte';
+	import DashboardLayout from '$lib/components/layouts/DashboardLayout.svelte';
 	import TabContainer from '../../../lib/components/ui/TabContainer.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { toasts } from '$lib/stores/toastStore';
-	
+
 	// Feature components
 	import ClienteDetailHeader from '../../../features/clientes/components/ClienteDetailHeader.svelte';
 	import ClienteModalManager from '../../../features/clientes/components/ClienteModalManager.svelte';
 	import MedidasHistoricas from '../../../features/clientes/components/individual/medidas/MedidasHistoricas.svelte';
 	import HistorialPagos from '../../../features/clientes/components/individual/pagos/HistorialPagos.svelte';
-	
+
 	// Composables
 	import { useClienteDetailPage } from '../../../features/clientes/composables/useClienteDetailPage';
 
 	// Initialize page state
 	$: clienteId = parseInt($page.params.id);
 	$: pageManager = useClienteDetailPage(clienteId);
-	
+
 	// Destructure for easier access
-	$: ({ 
-		cliente, 
-		isLoading, 
-		error, 
-		esActivo, 
+	$: ({
+		cliente,
+		isLoading,
+		error,
+		esActivo,
 		diasRestantes,
 		pageState,
 		tabs,
@@ -34,7 +35,7 @@
 		reloadClienteData,
 		modalActions
 	} = pageManager);
-		// Current page state
+	// Current page state
 	$: ({
 		showEditModal,
 		showPagoModal,
@@ -62,7 +63,10 @@
 	// Event handlers
 	function handleModalClose(event: CustomEvent) {
 		const { modal } = event.detail;
-		const closeFunction = modalActions[`close${modal.charAt(0).toUpperCase() + modal.slice(1)}Modal` as keyof typeof modalActions];
+		const closeFunction =
+			modalActions[
+				`close${modal.charAt(0).toUpperCase() + modal.slice(1)}Modal` as keyof typeof modalActions
+			];
 		if (typeof closeFunction === 'function') {
 			closeFunction();
 		}
@@ -73,7 +77,8 @@
 		if (action === 'delete') {
 			confirmDeleteCliente();
 		}
-	}	async function confirmDeleteCliente() {
+	}
+	async function confirmDeleteCliente() {
 		try {
 			await pageManager.eliminarCliente();
 			toasts.showToast('Cliente eliminado correctamente', 'success');
@@ -87,7 +92,7 @@
 
 	function handleTabChange(event: CustomEvent) {
 		const { tab } = event.detail;
-		pageState.update(state => ({ ...state, activeTab: tab }));
+		pageState.update((state) => ({ ...state, activeTab: tab }));
 	}
 </script>
 
@@ -109,17 +114,20 @@
 					class="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent"
 				></div>
 			</div>
-		{:else if $cliente}			<!-- Client Header -->
+		{:else if $cliente}
+			<!-- Client Header -->
 			<ClienteDetailHeader
 				cliente={$cliente}
 				{tieneDeudaPendiente}
 				{tieneCuotasPendientes}
 				cuotasPendientes={$pageState.cuotasPendientes}
+				historialPagos={$pageState.historialPagos}
 				on:edit={modalActions.openEditModal}
 				on:renovarMembresia={modalActions.openPagoModal}
 				on:completarPago={modalActions.openCompletarPagoModal}
 				on:delete={modalActions.openDeleteModal}
-			/>			<!-- Tabs Container -->
+			/>
+			<!-- Tabs Container -->
 			<TabContainer
 				tabs={$tabs}
 				{activeTab}
@@ -137,9 +145,7 @@
 				</div>
 			</TabContainer>
 		{:else}
-			<div class="flex h-64 items-center justify-center text-gray-500">
-				Cliente no encontrado
-			</div>
+			<div class="flex h-64 items-center justify-center text-gray-500">Cliente no encontrado</div>
 		{/if}
 
 		<!-- Modal Manager -->

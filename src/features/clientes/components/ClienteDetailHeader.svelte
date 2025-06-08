@@ -4,11 +4,11 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import type { Cliente } from '../types';
-	
 	export let cliente: Cliente;
 	export let tieneDeudaPendiente: boolean = false;
 	export let tieneCuotasPendientes: boolean = false;
 	export let cuotasPendientes: any[] = [];
+	export let historialPagos: any[] = [];
 
 	const dispatch = createEventDispatcher<{
 		edit: void;
@@ -24,8 +24,11 @@
 		let edad = hoy.getFullYear() - nacimiento.getFullYear();
 		const mesActual = hoy.getMonth();
 		const mesNacimiento = nacimiento.getMonth();
-		
-		if (mesActual < mesNacimiento || (mesActual === mesNacimiento && hoy.getDate() < nacimiento.getDate())) {
+
+		if (
+			mesActual < mesNacimiento ||
+			(mesActual === mesNacimiento && hoy.getDate() < nacimiento.getDate())
+		) {
 			edad--;
 		}
 		return edad;
@@ -35,12 +38,30 @@
 		if (!dateString) return 'No disponible';
 		return new Date(dateString).toLocaleDateString('es-ES');
 	}
-
 	function getMembresia(): string {
+		// Primero intentar obtener el plan desde el historial de pagos (datos más completos)
+		if (historialPagos && historialPagos.length > 0) {
+			// Buscar el pago más reciente que tenga inscripción con plan
+			const pagoConPlan = historialPagos
+				.filter((pago) => pago.inscripcion && pago.inscripcion.plan && pago.inscripcion.plan.nombre)
+				.sort((a, b) => new Date(b.fechaPago).getTime() - new Date(a.fechaPago).getTime())[0];
+
+			if (pagoConPlan) {
+				return pagoConPlan.inscripcion.plan.nombre;
+			}
+		}
+
+		// Fallback: usar la información del cliente (que puede estar incompleta)
 		if (!cliente?.inscripciones || cliente.inscripciones.length === 0) {
 			return 'Sin plan activo';
 		}
-		return cliente.inscripciones[0]?.plan?.nombre || 'Sin plan';
+
+		// Intentar obtener de la inscripción más reciente
+		const inscripcionActiva = cliente.inscripciones.sort(
+			(a, b) => new Date(b.fechaInicio || '').getTime() - new Date(a.fechaInicio || '').getTime()
+		)[0];
+
+		return inscripcionActiva?.plan?.nombre || 'Sin plan';
 	}
 </script>
 
@@ -150,18 +171,16 @@
 				</div>
 			</div>
 		</div>
-		
+
 		{#if tieneDeudaPendiente}
 			<div class="mx-auto mt-8 max-w-4xl rounded-md border border-red-200 bg-red-50 p-4">
 				<p class="text-center font-medium text-red-700">
-					⚠️ Este cliente tiene un pago de plan pendiente. Complete el pago antes de realizar
-					nuevas acciones.
+					⚠️ Este cliente tiene un pago de plan pendiente. Complete el pago antes de realizar nuevas
+					acciones.
 				</p>
 			</div>
 		{:else if tieneCuotasPendientes}
-			<div
-				class="mx-auto mt-8 max-w-4xl rounded-md border border-orange-200 bg-orange-50 p-4"
-			>
+			<div class="mx-auto mt-8 max-w-4xl rounded-md border border-orange-200 bg-orange-50 p-4">
 				<p class="text-center font-medium text-orange-700">
 					ℹ️ Este cliente tiene {cuotasPendientes.length} cuota{cuotasPendientes.length > 1
 						? 's'
@@ -174,9 +193,7 @@
 		<!-- Información adicional colapsable -->
 		{#if cliente.fechaNacimiento || cliente.direccion || cliente.ciudad}
 			<details class="mx-auto mt-8 max-w-4xl">
-				<summary
-					class="mb-4 cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-800"
-				>
+				<summary class="mb-4 cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-800">
 					Ver información adicional
 				</summary>
 				<div class="grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 md:grid-cols-2">
