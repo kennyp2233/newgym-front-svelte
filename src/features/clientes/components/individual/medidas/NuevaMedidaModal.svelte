@@ -1,20 +1,22 @@
 <!-- src/features/clientes/components/individual/medidas/NuevaMedidaModal.svelte -->
-<script lang="ts">
-	import { createForm } from 'svelte-forms-lib';
+<script lang="ts">	import { createForm } from 'svelte-forms-lib';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
-	import { medidaService } from '../../../../medidas/api';
+	import { createMedidasListStore, medidaUtils } from '../../../../medidas/composables/medidaComposables';
 	import type { Cliente } from '../../../api';
 	import { TipoOcupacion } from '../../../api';
 	import { toasts } from '$lib/stores/toastStore';
 	import * as yup from 'yup';
-
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let onClose: () => void = () => {};
 	export let onSuccess: () => void = () => {};
+
+	// Crear el store de medidas para este cliente
+	const medidasStore = createMedidasListStore(cliente.idCliente);
+	const { crearMedida } = medidasStore;
 
 	let isSubmitting = false;
 	let imc = '';
@@ -124,75 +126,36 @@
 							cintura: parseFloat($form.cintura),
 							cuello: $form.cuello ? parseFloat($form.cuello) : undefined
 						})
-			};
-
-			await medidaService.createMedida(medidaData);
-			toasts.showToast('Medida registrada correctamente', 'success');
-			onSuccess();
-		} catch (error) {
-			console.error('Error al registrar medida:', error);
-			toasts.showToast('Error al registrar medida', 'error');
+			};			await crearMedida(medidaData);
+			onSuccess();		} catch (error) {
+			// El error ya se maneja en el composable
 		} finally {
 			isSubmitting = false;
 		}
 	}
-
-	// Función para calcular IMC
+	// Función para calcular IMC usando el composable
 	function calcularIMC(peso: number, altura: number) {
 		if (!peso || !altura) return;
 
-		// Convertir altura a metros si viene en cm
-		const alturaMetros = altura > 3 ? altura / 100 : altura;
-		const imcValue = peso / (alturaMetros * alturaMetros);
-
-		let categoria = '';
-		if (imcValue < 18.5) categoria = 'Bajo peso';
-		else if (imcValue < 25) categoria = 'Normal';
-		else if (imcValue < 30) categoria = 'Sobrepeso';
-		else categoria = 'Obesidad';
-
-		imc = imcValue.toFixed(2);
-		categoriaPeso = categoria;
+		const resultado = medidaUtils.calcularIMC(peso, altura);
+		if (resultado) {
+			imc = resultado.imc.toString();
+			categoriaPeso = resultado.categoria;
+		}
 	}
 
 	// Reactivos para calcular IMC automáticamente
 	$: if ($form.peso && $form.altura) {
 		calcularIMC(parseFloat($form.peso), parseFloat($form.altura));
 	}
-
-	// Función para validar rangos
+	// Función para validar rangos usando el composable
 	function validateRange(value: string | number, min: number, max: number): boolean {
-		if (value === null || value === undefined || value === '') return true;
-		const num = typeof value === 'number' ? value : parseFloat(String(value));
-		if (isNaN(num)) return false;
-		return num >= min && num <= max;
+		return medidaUtils.validateRange(value, min, max);
 	}
 
-	// Determinar si mostrar advertencia de rango
+	// Determinar si mostrar advertencia de rango usando el composable
 	function getRangeWarning(field: string, value: string | number): string {
-		if (value === null || value === undefined || value === '') return '';
-		const num = typeof value === 'number' ? value : parseFloat(String(value));
-
-		const ranges: Record<string, { min: number; max: number; unit: string }> = {
-			peso: { min: 1, max: 300, unit: 'kg' },
-			altura: { min: 30, max: 250, unit: 'cm' },
-			brazos: { min: 1, max: 200, unit: 'cm' },
-			pantorrillas: { min: 1, max: 200, unit: 'cm' },
-			gluteo: { min: 1, max: 200, unit: 'cm' },
-			muslos: { min: 1, max: 200, unit: 'cm' },
-			pecho: { min: 1, max: 200, unit: 'cm' },
-			cintura: { min: 1, max: 200, unit: 'cm' },
-			cuello: { min: 1, max: 100, unit: 'cm' }
-		};
-
-		const range = ranges[field];
-		if (!range) return '';
-
-		if (isNaN(num) || num < range.min || num > range.max) {
-			return `Debe estar entre ${range.min} y ${range.max} ${range.unit}`;
-		}
-
-		return '';
+		return medidaUtils.getRangeWarning(field, value);
 	}
 </script>
 

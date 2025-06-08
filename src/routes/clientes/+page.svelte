@@ -7,50 +7,40 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
-	import BaseModal from '$lib/components/modals/BaseModal.svelte';
-	import { clienteStore } from '../../features/clientes/stores/clienteStore';
+	import BaseModal from '$lib/components/modals/BaseModal.svelte';	import { createClientesListStore, clienteUtils } from '../../features/clientes/composables/clienteComposables';
 	import { toasts } from '$lib/stores/toastStore';
 	import { calcularDiasRestantes, formatDate } from '$lib/utils';
 	import type { Cliente, RegistroCompletoDTO } from '../../features/clientes/api';
 	import type { ClienteFormData } from '../../features/clientes/forms/validation';
 	import ClienteFormModal from '../../features/clientes/components/general/ClienteFormModal.svelte';
+	// Initialize composable store
+	const clientesListStore = createClientesListStore();
+	const { 
+		clientes, 
+		clientesFiltrados, 
+		isLoading, 
+		error, 
+		totalClientes, 
+		clientesActivos, 
+		clientesInactivos 
+	} = clientesListStore;
 
 	let searchTerm = '';
 	let showDeleteModal = false;
 	let showFormModal = false;
 	let selectedCliente: Cliente | null = null;
 	let clienteToEdit: Partial<ClienteFormData> | null = null;
-	let isEditing = false; // Reactive statement para filtrar clientes
-	$: filteredClientes = ($clienteStore.clientes || []).filter(
-		(cliente) =>
-			cliente &&
-			cliente.idCliente &&
-			(`${cliente.nombre} ${cliente.apellido}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-				cliente.cedula.includes(searchTerm) ||
-				cliente.celular.includes(searchTerm))
-	);
+	let isEditing = false; 
+
+	// Update search term using composable
+	$: clientesListStore.setSearchTerm(searchTerm);
 
 	// Debug reactivo para ver cambios en el store
-	$: if ($clienteStore.clientes) {
-		console.log('Clientes en store actualizados:', $clienteStore.clientes.length, 'clientes');
-	}
-	// Determinar el estado de la membresía
+	$: if ($clientes) {
+		console.log('Clientes en store actualizados:', $clientes.length, 'clientes');
+	}	// Determinar el estado de la membresía usando utilidades del composable
 	function determinarEstado(cliente: Cliente) {
-		if (!cliente || !cliente.inscripciones || cliente.inscripciones.length === 0) {
-			return 'Sin membresía';
-		}
-
-		const inscripcionActiva = cliente.inscripciones.sort(
-			(a, b) => new Date(b.fechaFin || '').getTime() - new Date(a.fechaFin || '').getTime()
-		)[0];
-
-		if (!inscripcionActiva?.fechaFin) return 'Sin membresía';
-
-		const diasRestantes = calcularDiasRestantes(inscripcionActiva.fechaFin);
-
-		if (diasRestantes === 0) return 'Expirada';
-		else if (diasRestantes <= 7) return 'Renovar';
-		else return 'En curso';
+		return clienteUtils.determinarEstado(cliente);
 	}
 
 	// Configuración de columnas para la tabla
@@ -100,7 +90,7 @@
 
 				if (!inscripcionActiva?.fechaFin) return '0 días';
 
-				const dias = calcularDiasRestantes(inscripcionActiva.fechaFin);
+				const dias = clienteUtils.calcularDiasRestantes(cliente);
 				return dias === 1 ? `${dias} día` : `${dias} días`;
 			}
 		},
@@ -188,43 +178,37 @@
 		selectedCliente = cliente;
 		showDeleteModal = true;
 	}
-
 	async function confirmDeleteCliente() {
 		if (!selectedCliente) return;
 
 		try {
-			await clienteStore.deleteCliente(selectedCliente.idCliente);
-			toasts.showToast('Cliente eliminado correctamente', 'success');
+			await clientesListStore.eliminarCliente(selectedCliente.idCliente);
 		} catch (error) {
-			toasts.showToast('Error al eliminar el cliente', 'error');
+			// Error handling is done in the composable
 		} finally {
 			showDeleteModal = false;
 			selectedCliente = null;
 		}
-	}
-	async function handleClienteSubmit(registroData: RegistroCompletoDTO) {
+	}	async function handleClienteSubmit(registroData: RegistroCompletoDTO) {
 		try {
 			if (isEditing && selectedCliente) {
-				// Actualizar cliente existente - esto necesitaría implementarse en el store
-				// Por ahora simulo el comportamiento
-				toasts.showToast('Cliente actualizado correctamente', 'success');
+				// Actualizar cliente existente - solo datos del cliente, no registro completo
+				await clientesListStore.actualizarCliente(selectedCliente.idCliente, registroData.cliente);
 			} else {
-				// Crear nuevo cliente
+				// Crear nuevo cliente usando composable
 				console.log('Enviando datos del cliente:', registroData);
-				await clienteStore.addCliente(registroData);
+				await clientesListStore.crearCliente(registroData);
 				console.log('Cliente agregado, store actualizado');
-				toasts.showToast('Cliente registrado correctamente', 'success');
 			}
 			showFormModal = false;
 		} catch (error) {
 			console.error('Error en handleClienteSubmit:', error);
-			// El error ya se maneja en el modal
+			// El error ya se maneja en el composable
 			throw error;
 		}
 	}
-
 	onMount(() => {
-		clienteStore.loadClientes();
+		clientesListStore.cargarClientes();
 	});
 </script>
 
@@ -249,13 +233,12 @@
 					<Icon name="add" size={16} className="mr-2" />
 					Agregar Cliente
 				</Button>
-			</div>
-			<Table
-				data={filteredClientes}
+			</div>			<Table
+				data={$clientesFiltrados}
 				{columns}
 				keyExtractor={(item) => item?.idCliente?.toString() || 'unknown'}
 				onRowClick={handleViewDetails}
-				isLoading={$clienteStore.loading}
+				isLoading={$isLoading}
 				emptyStateMessage="No se encontraron clientes que coincidan con la búsqueda"
 				rowClassName={() => 'bg-[var(--sections)] hover:bg-[var(--sections-hover)] cursor-pointer'}
 				className="rounded-lg overflow-hidden"
@@ -295,8 +278,7 @@
 		</div>
 
 		<svelte:fragment slot="footer">
-			<Button variant="outline" on:click={() => (showDeleteModal = false)}>Cancelar</Button>
-			<Button variant="danger" on:click={confirmDeleteCliente} isLoading={$clienteStore.loading}>
+			<Button variant="outline" on:click={() => (showDeleteModal = false)}>Cancelar</Button>			<Button variant="danger" on:click={confirmDeleteCliente} isLoading={$isLoading}>
 				Eliminar
 			</Button>
 		</svelte:fragment>

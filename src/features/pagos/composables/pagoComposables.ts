@@ -122,12 +122,29 @@ export function createPagoStore(clienteId: number) {
             toasts.showToast('Error al completar pago', 'error');
             return false;
         }
-    }
-
-    async function crearPago(data: RenovacionPlanDTO): Promise<boolean> {
+    }    async function crearPago(data: RenovacionPlanDTO): Promise<boolean> {
         try {
             _isLoading.set(true);
             const response = await pagoService.renovarPlan(data);
+
+            // Si hay cuotas por pagar, marcarlas como pagadas
+            if (data.cuotasPorPagar && data.cuotasPorPagar.length > 0 && response.datos.pago.idPago) {
+                try {
+                    const { cuotaMantenimientoService } = await import('../../cuotas-mantenimiento/api');
+                    
+                    // Marcar cada cuota como pagada
+                    const promesasCuotas = data.cuotasPorPagar.map(idCuota => 
+                        cuotaMantenimientoService.marcarComoPagada(idCuota, response.datos.pago.idPago)
+                    );
+                    
+                    await Promise.all(promesasCuotas);
+                    console.log(`✅ Se asociaron ${data.cuotasPorPagar.length} cuota(s) con el pago ${response.datos.pago.idPago}`);
+                } catch (cuotaError) {
+                    console.error('Error al asociar cuotas con el pago:', cuotaError);
+                    // No fallar el proceso completo por este error, pero notificar
+                    toasts.showToast('Pago creado pero hubo un problema al asociar las cuotas', 'warning');
+                }
+            }
 
             // Mostrar mensaje de éxito según el estado del pago
             if (response.datos.pago.estado === 'Completado') {

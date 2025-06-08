@@ -1,22 +1,24 @@
 <!-- src/features/clientes/components/individual/medidas/MedidaDetailModal.svelte -->
-<script lang="ts">
-	import { createForm } from 'svelte-forms-lib';
+<script lang="ts">	import { createForm } from 'svelte-forms-lib';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
-	import { medidaService, type Medida } from '../../../../medidas/api';
+	import { createMedidasListStore, medidaUtils, type Medida } from '../../../../medidas/composables/medidaComposables';
 	import type { Cliente } from '../../../api';
 	import { TipoOcupacion } from '../../../api';
 	import { toasts } from '$lib/stores/toastStore';
 	import * as yup from 'yup';
-
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let medida: Medida;
 	export let onClose: () => void = () => {};
 	export let onSuccess: () => void = () => {};
+
+	// Crear el store de medidas para este cliente
+	const medidasStore = createMedidasListStore(cliente.idCliente);
+	const { actualizarMedida } = medidasStore;
 
 	let isEditing = false;
 	let isSubmitting = false;
@@ -123,21 +125,15 @@
 							cintura: parseFloat($form.cintura),
 							cuello: $form.cuello ? parseFloat($form.cuello) : undefined
 						})
-			};
-
-			await medidaService.updateMedida(medida.idMedida, medidaData);
-			toasts.showToast('Medida actualizada correctamente', 'success');
+			};			await actualizarMedida(medida.idMedida, medidaData);
 			isEditing = false;
-			onSuccess();
-		} catch (error) {
-			console.error('Error al actualizar medida:', error);
-			toasts.showToast('Error al actualizar medida', 'error');
+			onSuccess();		} catch (error) {
+			// El error ya se maneja en el composable
 		} finally {
 			isSubmitting = false;
 		}
 	}
-
-	// Función para calcular IMC
+	// Función para calcular IMC usando el composable
 	function calcularIMC(peso: number, altura: number) {
 		if (!peso || !altura) {
 			imc = '';
@@ -145,17 +141,11 @@
 			return;
 		}
 
-		const alturaMetros = altura > 3 ? altura / 100 : altura;
-		const imcValue = peso / (alturaMetros * alturaMetros);
-
-		let categoria = '';
-		if (imcValue < 18.5) categoria = 'Bajo peso';
-		else if (imcValue < 25) categoria = 'Normal';
-		else if (imcValue < 30) categoria = 'Sobrepeso';
-		else categoria = 'Obesidad';
-
-		imc = imcValue.toFixed(2);
-		categoriaPeso = categoria;
+		const resultado = medidaUtils.calcularIMC(peso, altura);
+		if (resultado) {
+			imc = resultado.imc.toString();
+			categoriaPeso = resultado.categoria;
+		}
 	}
 
 	// Inicializar IMC con valores de la medida existente
@@ -167,16 +157,9 @@
 	$: if (isEditing && $form.peso && $form.altura) {
 		calcularIMC(parseFloat($form.peso), parseFloat($form.altura));
 	}
-
-	// Formatear fecha
+	// Formatear fecha usando el composable
 	function formatDate(dateString: string): string {
-		return new Date(dateString).toLocaleDateString('es-ES', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
+		return medidaUtils.formatDate(dateString);
 	}
 	function toggleEdit() {
 		isEditing = !isEditing;

@@ -172,7 +172,7 @@ export const createMontoValidation = (planes: any[]) => {
         .nullable();
 };
 
-// Helper para crear Step3Schema con validación de monto específica
+// Helper para crear Step3Schema with validación de monto específica
 export const createStep3SchemaWithPlanValidation = (planes: any[]) => {
     return yup.object({
         fechaInicio: yup
@@ -244,6 +244,53 @@ export const defaultClienteFormValues: ClienteFormData = {
     incluyeAnualidad: true,
     montoAnualidad: null,
 };
+
+// Esquema específico para edición de información personal del cliente
+export const EditClienteSchema = yup.object({
+    nombre: yup.string().required('El nombre es requerido'),
+    apellido: yup.string().required('El apellido es requerido'),
+    cedula: yup.string().required('La cédula es requerida'),
+    celular: yup.string().required('El celular es requerido'),
+    ciudad: yup.string().required('La ciudad es requerida'),
+    pais: yup.string().required('El país es requerido'),
+    direccion: yup.string().required('La dirección es requerida'),
+    correo: yup.string().email('Correo inválido').required('El correo es requerido'),
+    ocupacion: yup.string().required('La ocupación es requerida'),
+    puestoTrabajo: yup.string().when('ocupacion', {
+        is: TipoOcupacion.TRABAJO,
+        then: (schema) => schema.required('El puesto de trabajo es requerido'),
+        otherwise: (schema) => schema.notRequired()
+    }),
+    fechaNacimiento: yup.string().nullable()
+});
+
+// Valores iniciales para edición de cliente
+export const createEditClienteFormValues = (cliente: any) => ({
+    nombre: cliente.nombre || '',
+    apellido: cliente.apellido || '',
+    cedula: cliente.cedula || '',
+    celular: cliente.celular || '',
+    ciudad: cliente.ciudad || '',
+    pais: cliente.pais || '',
+    direccion: cliente.direccion || '',
+    correo: cliente.correo || '',
+    ocupacion: cliente.ocupacion || TipoOcupacion.ESTUDIANTE,
+    puestoTrabajo: cliente.puestoTrabajo || '',
+    fechaNacimiento: cliente.fechaNacimiento || ''
+});
+
+// Función para filtrar planes según ocupación
+export function filtrarPlanesPorOcupacion(planes: any[], ocupacion: TipoOcupacion) {
+    if (!planes || planes.length === 0) return [];
+
+    if (ocupacion === TipoOcupacion.NINO) {
+        return planes.filter((plan) => plan.tag === 'Niño');
+    } else if (ocupacion === TipoOcupacion.ESTUDIANTE) {
+        return planes.filter((plan) => plan.tag === 'Estudiante');
+    } else {
+        return planes.filter((plan) => plan.tag === 'Trabajo');
+    }
+}
 
 // Función para determinar si debe aplicarse el fee anual de $10
 export function shouldApplyAnnualFee(pagos: PagoDTO[] = [], isNewClient: boolean = false): boolean {
