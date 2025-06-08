@@ -250,18 +250,12 @@ export const pagoUtils = {    /**
         // Agregar anualidad si está incluida (esto sí afecta el estado del pago del plan)
         if (pago.incluyeAnualidad && pago.montoAnualidad) {
             montoEsperadoDelPlan += pago.montoAnualidad;
-        }
-
-        // NO agregar cuotas de mantenimiento - estas son pagos separados
+        }        // NO agregar cuotas de mantenimiento - estas son pagos separados
         // y no deben afectar el estado de completado del pago del plan
 
-        // Para pagos con cuotas de mantenimiento, calcular solo la parte del plan
-        let montoDelPlan = monto;
-        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
-            const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
-            // Restar las cuotas del monto total para obtener solo la parte del plan
-            montoDelPlan = Math.max(0, monto - montoCuotas);
-        }
+        // CORREGIDO: Con la nueva estructura del backend, el monto ya es solo el plan
+        // No necesitamos restar cuotas de mantenimiento porque están separadas
+        const montoDelPlan = monto;
 
         // Un pago está completado cuando el monto del plan cubre o excede el precio del plan
         return montoDelPlan >= montoEsperadoDelPlan ? 'Completado' : 'Pendiente';
@@ -279,18 +273,12 @@ export const pagoUtils = {    /**
         // Agregar anualidad si está incluida (esto sí afecta el pago del plan)
         if (pago.incluyeAnualidad && pago.montoAnualidad) {
             montoEsperadoDelPlan += pago.montoAnualidad;
-        }
-
-        // NO agregar cuotas de mantenimiento - estas son pagos separados
+        }        // NO agregar cuotas de mantenimiento - estas son pagos separados
         // y no deben afectar el monto restante del pago del plan
 
-        // Para pagos con cuotas de mantenimiento, calcular solo la parte del plan
-        let montoDelPlan = pago.monto;
-        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
-            const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
-            // Restar las cuotas del monto total para obtener solo la parte del plan
-            montoDelPlan = Math.max(0, pago.monto - montoCuotas);
-        }
+        // CORREGIDO: Con la nueva estructura del backend, pago.monto ya es solo el plan
+        // No necesitamos restar cuotas de mantenimiento porque están separadas
+        const montoDelPlan = pago.monto;
 
         // Calcular el monto restante solo considerando el plan
         return Math.max(0, montoEsperadoDelPlan - montoDelPlan);

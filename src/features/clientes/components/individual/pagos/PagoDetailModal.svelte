@@ -25,14 +25,17 @@
 	export let onSuccess: () => void = () => {};
 
 	// Estados usando composable
-	const pagoStore = createPagoStore(cliente.idCliente);
-
-	// Para pagos con cuotas de mantenimiento, separar los montos
-	$: montoCuotasMantenimiento =
-		pago.cuotasMantenimiento?.reduce((sum, cuota) => sum + cuota.monto, 0) || 0;
-	$: montoPlanActual = pagoService.identificarPagoConCuotas(pago)
-		? pago.monto - montoCuotasMantenimiento
-		: pago.monto;
+	const pagoStore = createPagoStore(cliente.idCliente);	// Para pagos con cuotas de mantenimiento, separar los montos
+	// CORREGIDO: Usar el nuevo campo montoCuotaMantenimiento si está disponible
+	$: montoCuotasMantenimiento = pago.montoCuotaMantenimiento || 
+		(pago.cuotasMantenimiento?.reduce((sum, cuota) => sum + cuota.monto, 0) || 0);
+	
+	// CORREGIDO: Con la nueva estructura, pago.monto YA es solo el monto del plan
+	// No necesitamos restar las cuotas porque el backend ahora envía campos separados:
+	// - pago.monto = monto del plan únicamente
+	// - pago.montoCuotaMantenimiento = monto de cuotas de mantenimiento
+	// - pago.montoTotal = monto total
+	$: montoPlanActual = pago.monto;
 
 	// Calcular monto máximo permitido para este pago
 	$: montoMaximoPermitido = pagoService.identificarPagoConCuotas(pago)
@@ -106,19 +109,15 @@
 			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
 			return;
 		}
-		isSubmitting = true;
-		try {
+		isSubmitting = true;		try {
 			// Handle empty monto field properly to avoid NaN
 			const montoPlanIngresado = $form.monto ? parseFloat($form.monto.toString()) : 0;
-			let montoTotalFinal = montoPlanIngresado;
 
-			// Para pagos con cuotas de mantenimiento, sumar las cuotas al monto del plan
-			if (pagoService.identificarPagoConCuotas(pago)) {
-				montoTotalFinal = montoPlanIngresado + montoCuotasMantenimiento;
-			}
-
+			// Con la nueva estructura del backend, solo enviamos el monto del plan
+			// Las cuotas de mantenimiento se mantienen como un campo separado
 			const pagoData = {
-				monto: montoTotalFinal, // Enviar el monto total (plan + cuotas)
+				monto: montoPlanIngresado, // Solo el monto del plan
+				montoCuotaMantenimiento: pagoService.identificarPagoConCuotas(pago) ? montoCuotasMantenimiento : undefined,
 				// metodoPago field removed as per new requirements
 				// estado field calculated automatically by frontend logic based on payment amount vs expected total
 				referencia: $form.referencia || undefined,

@@ -73,11 +73,10 @@
 		// Preparar datos según documentación estricta
 		const cuotasTotal = $cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
 		const montoPlan = parseFloat($form.monto) || 0;
-		
-		const exito = await pagoStore.crearPago({
+				const exito = await pagoStore.crearPago({
 			idCliente: cliente.idCliente,
 			idPlan: parseInt($form.idPlan),
-			monto: montoPlan + cuotasTotal, // Total = plan + cuotas
+			monto: montoPlan, // Solo el monto del plan
 			montoCuotaMantenimiento: cuotasTotal, // Cuotas pendientes
 			fechaInicio: $form.fechaInicio || undefined,
 			referencia: $form.referencia || undefined,

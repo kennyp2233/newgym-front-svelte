@@ -6,7 +6,9 @@ export interface PagoDTO {
     idPago?: number;
     idCliente: number;
     idInscripcion?: number;
-    monto: number;
+    monto: number; // Plan amount only (e.g., 24.00)
+    montoCuotaMantenimiento?: number; // Maintenance fee amount (e.g., 10.00)
+    montoTotal?: number; // Total amount (e.g., 34.00)
     fechaPago: string;
     metodoPago?: 'Efectivo' | 'Transferencia' | 'Tarjeta'; // DEPRECATED: Payment method no longer tracked in new payments
     estado?: 'Completado' | 'Pendiente' | 'Anulado'; // Automatically managed by backend based on payment total
@@ -336,29 +338,37 @@ class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según docume
         } catch (error) {
             console.error('Error al calcular monto total con cuotas:', error);
             throw error;
-        }
-    }    // Formatear información de pago con cuotas - ACTUALIZADO según requisitos
+        }    }
+
+    // Formatear información de pago con cuotas - ACTUALIZADO según requisitos
     formatearPagoConCuotas(pago: PagoDTO): string {
         if (!pago.inscripcion?.plan) return 'Plan no especificado';
 
         const montoPlanCompleto = pago.inscripcion.plan.precio;
 
+        // CORREGIDO: Usar la nueva estructura de campos separados
         // Solo mostrar formato con cuotas si efectivamente tiene cuotasMantenimiento con elementos
-        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
-            const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
+        // O si tiene el campo montoCuotaMantenimiento
+        if ((pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) || pago.montoCuotaMantenimiento) {
+            // Con la nueva estructura, pago.monto YA es solo el monto del plan
+            const montoDepositadoDelPlan = pago.monto;
             
-            // Calcular cuánto se depositó del plan (restando las cuotas del monto total)
-            const montoDepositadoDelPlan = pago.monto - montoCuotas;
+            // Obtener el monto de cuotas de la nueva estructura o del array legacy
+            const montoCuotas = pago.montoCuotaMantenimiento || 
+                (pago.cuotasMantenimiento?.reduce((sum, cuota) => sum + cuota.monto, 0) || 0);
             
-            // Siempre mostrar el desglose: monto depositado del plan + cuotas fijas
+            // Mostrar el desglose: monto del plan + cuotas fijas
             return `$${montoDepositadoDelPlan.toFixed(2)} + $${montoCuotas.toFixed(2)} (cuotas)`;
         }
 
         return `$${montoPlanCompleto.toFixed(2)}`;
-    }// Identificar si un pago tiene cuotas de mantenimiento asociadas - ACTUALIZADO según requisitos
+    }
+
+    // Identificar si un pago tiene cuotas de mantenimiento asociadas - ACTUALIZADO según requisitos
     identificarPagoConCuotas(pago: PagoDTO): boolean {
-        // Solo considerar que tiene cuotas si hay un array de cuotasMantenimiento con elementos
-        return !!(pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0);
+        // CORREGIDO: También considerar el nuevo campo montoCuotaMantenimiento
+        return !!(pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) || 
+               !!(pago.montoCuotaMantenimiento && pago.montoCuotaMantenimiento > 0);
     }
 
     // Calcular monto mínimo para renovación con cuotas pendientes - NUEVO según documentación
