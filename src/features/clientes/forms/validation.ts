@@ -99,7 +99,7 @@ export const Step2Schema = yup.object({
     categoriaPeso: yup.string().nullable()
 });
 
-// STEP 3 ACTUALIZADO CON CAMPOS DE PAGO
+// STEP 3 ACTUALIZADO CON CAMPOS DE PAGO Y ANUALIDAD
 export const Step3Schema = yup.object({
     fechaInicio: yup
         .string()
@@ -113,7 +113,8 @@ export const Step3Schema = yup.object({
             const hoy = new Date();
             const fechaHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
             return fechaSeleccionada >= fechaHoy;
-        }),    monto: yup
+        }),
+    monto: yup
         .mixed()
         .test('is-number-or-empty', 'Debe ser un número válido', (value) => {
             if (value === '' || value === null || value === undefined) return true;
@@ -138,7 +139,10 @@ export const Step3Schema = yup.object({
     observaciones: yup
         .string()
         .max(150, 'Las observaciones no pueden exceder 150 caracteres')
-        .nullable()
+        .nullable(),
+    // Nuevos campos para anualidad
+    incluyeAnualidad: yup.boolean().default(true),
+    montoAnualidad: yup.number().nullable(),
 });
 
 // Helper para validar monto máximo considerando plan + renovación anual
@@ -189,7 +193,10 @@ export const createStep3SchemaWithPlanValidation = (planes: any[]) => {
         observaciones: yup
             .string()
             .max(150, 'Las observaciones no pueden exceder 150 caracteres')
-            .nullable()
+            .nullable(),
+        // Nuevos campos para anualidad
+        incluyeAnualidad: yup.boolean().default(true),
+        montoAnualidad: yup.number().nullable(),
     });
 };
 
@@ -229,10 +236,13 @@ export const defaultClienteFormValues: ClienteFormData = {
     categoriaPeso: null,
     idPlan: '',
     fechaInicio: new Date().toISOString().split('T')[0],
-    // NUEVOS CAMPOS DE PAGO
+    // CAMPOS DE PAGO
     monto: null,
     referencia: null,
     observaciones: null,
+    // NUEVOS CAMPOS DE ANUALIDAD
+    incluyeAnualidad: true,
+    montoAnualidad: null,
 };
 
 // Función para determinar si debe aplicarse el fee anual de $10

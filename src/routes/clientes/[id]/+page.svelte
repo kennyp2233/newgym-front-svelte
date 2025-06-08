@@ -15,8 +15,11 @@
 	import NuevoPagoModal from '../../../features/clientes/components/individual/pagos/NuevoPagoModal.svelte';
 	import CompletarPagoModal from '../../../features/clientes/components/individual/pagos/CompletarPagoModal.svelte';
 	import NuevaMedidaModal from '../../../features/clientes/components/individual/medidas/NuevaMedidaModal.svelte';
-	import MedidasHistoricas from '../../../features/clientes/components/individual/medidas/MedidasHistoricas.svelte';
-	import HistorialPagos from '../../../features/clientes/components/individual/pagos/HistorialPagos.svelte';
+	import MedidasHistoricas from '../../../features/clientes/components/individual/medidas/MedidasHistoricas.svelte';	import HistorialPagos from '../../../features/clientes/components/individual/pagos/HistorialPagos.svelte';
+	
+	// Importar servicio de cuotas mantenimiento
+	import { cuotaMantenimientoService, type CuotaMantenimientoDTO } from '../../../features/cuotas-mantenimiento/api';
+	
 	// Estados reactivos
 	let cliente: Cliente | null = null;
 	let isLoading = false;
@@ -28,6 +31,10 @@
 	let tieneDeudaPendiente = false;
 	let pagosPendientes: any[] = [];
 	let historialPagos: any[] = [];
+	
+	// Estados para cuotas de mantenimiento
+	let cuotasPendientes: CuotaMantenimientoDTO[] = [];
+	let tieneCuotasPendientes = false;
 
 	// Estados para manejo de tabs y modales
 	let activeTab = 'medidas';
@@ -38,7 +45,6 @@
 	// Reactive statements
 	$: clienteId = parseInt($page.params.id);
 	$: esNino = cliente?.ocupacion === TipoOcupacion.NINO;
-
 	// IMPORTANTE: Hacer que los tabs sean reactivos al cliente
 	$: tabs = cliente
 		? [
@@ -63,12 +69,13 @@
 						clienteId,
 						cliente,
 						onUpdate: reloadClienteData,
-						key: componentKey // Forzar re-render
+						key: componentKey, // Forzar re-render
+						// NUEVO: Pasar cuotas pendientes para identificación de pagos
+						cuotasPendientesGlobales: cuotasPendientes
 					}
 				}
 			]
 		: [];
-
 	onMount(async () => {
 		// Verificar que tenemos un ID válido
 		if (isNaN(clienteId)) {
@@ -80,6 +87,8 @@
 		await loadClienteData();
 		await checkDeudaPendiente();
 		await loadPagosPendientes();
+		// IMPORTANTE: Cargar cuotas pendientes para asociarlas a los pagos
+		await loadCuotasPendientes();
 	});
 
 	// Cargar datos del cliente
@@ -115,7 +124,6 @@
 			console.error('Error al verificar deuda:', error);
 		}
 	}
-
 	// Cargar pagos pendientes
 	async function loadPagosPendientes() {
 		try {
@@ -129,7 +137,27 @@
 			console.error('Error al cargar pagos pendientes:', error);
 		}
 	}
-	// Función para recargar datos del cliente
+	
+	// NUEVA FUNCIÓN: Cargar cuotas pendientes del cliente
+	async function loadCuotasPendientes() {
+		if (isNaN(clienteId)) return;
+		
+		try {
+			// Verificar si tiene cuotas pendientes
+			const cuotasResponse = await cuotaMantenimientoService.tieneCuotasPendientes(clienteId);
+			tieneCuotasPendientes = cuotasResponse.tienePendientes;
+			
+			// Cargar todas las cuotas para poder asociarlas a los pagos
+			const todasCuotas = await cuotaMantenimientoService.getCuotasByCliente(clienteId);
+			cuotasPendientes = todasCuotas.filter(cuota => cuota.estado === 'Pendiente');
+			
+			console.log('Cuotas pendientes cargadas:', cuotasPendientes);
+		} catch (error) {
+			console.error('Error al cargar cuotas pendientes:', error);
+			cuotasPendientes = [];
+			tieneCuotasPendientes = false;
+		}
+	}	// Función para recargar datos del cliente
 	async function reloadClienteData() {
 		if (isNaN(clienteId)) return;
 
@@ -142,6 +170,8 @@
 				historialPagos = [];
 				await checkDeudaPendiente();
 				await loadPagosPendientes();
+				// IMPORTANTE: Recargar cuotas pendientes también
+				await loadCuotasPendientes();
 				// Incrementar key para forzar re-render de componentes hijos
 				componentKey++;
 			}

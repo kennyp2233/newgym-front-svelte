@@ -5,26 +5,77 @@
 	import { calcularIMC } from '$lib/utils';
 	import { planService, type Plan } from '../../../planes/api';
 	import { calculateTotalPrice } from '../../forms/validation';
-
+	import CuotaAnualidadField from '../../../cuotas-mantenimiento/components/CuotaAnualidadField.svelte';
+	import { cuotaMantenimientoUtils } from '../../../cuotas-mantenimiento/composables/cuotaMantenimientoComposables';
+	import type { CuotaMantenimientoDTO } from '../../../cuotas-mantenimiento/api';
+	import { onMount } from 'svelte';
 	export let data: any;
 	export let errors: any;
 	export let touched: any;
 	export let planes: Plan[] = [];
 	export let updateField: ((field: string, value: any) => void) | undefined = undefined;
-
+	export let clienteId: number | null = null; // Para clientes existentes, null para nuevos
 	$: planSeleccionado = planes.find((p) => p.idPlan === parseInt(data.idPlan || '0'));
 	$: fechaFin =
 		planSeleccionado && data.fechaInicio
 			? planService.calcularFechaFin(data.fechaInicio, planSeleccionado.duracionMeses)
 			: '';
 	$: imcData = calcularIMC(parseFloat(data.peso || '0'), parseFloat(data.altura || '0'));
-	$: imc = imcData ? `${imcData.imc} - ${imcData.categoria}` : 'Pendiente de cálculo';	// Calcular valores de pago (incluye renovación anual de $10 para nuevos clientes)
+	$: imc = imcData ? `${imcData.imc} - ${imcData.categoria}` : 'Pendiente de cálculo';
+		// Variables para manejo de anualidad usando composables
+	$: incluyeAnualidad = data.incluyeAnualidad ?? true; // Por defecto incluir anualidad
 	$: precioBase = planSeleccionado ? Number(planSeleccionado.precio) : 0;
-	$: precioTotal = planSeleccionado ? calculateTotalPrice(precioBase, [], true) : 0; // true = es cliente nuevo
-	$: annualFee = precioTotal - precioBase; // Mostrar el fee por separado
+	$: cuotasPendientes = []; // Se cargarían desde el servicio en un caso real
+	
+	// Calcular valores usando utilidades modulares
+	$: desglose = cuotaMantenimientoUtils.calcularDesglosePago(precioBase, cuotasPendientes);
+	$: precioTotal = incluyeAnualidad ? (precioBase + 10) : precioBase; // Simplificado para nuevos clientes
 	$: montoPago = data.monto ? parseFloat(data.monto) : precioTotal;
 	$: montoPendiente = Math.max(0, precioTotal - montoPago);
-	$: caracteresRestantes = 150 - (data.observaciones?.length || 0);
+	$: caracteresRestantes = 150 - (data.observaciones?.length || 0);	// Función para manejar cambio de anualidad - ACTUALIZADA según documentación
+	function handleAnualidadChange(incluye: boolean, monto: number) {
+		if (updateField) {
+			updateField('incluyeAnualidad', incluye);
+			updateField('montoAnualidad', monto);
+			
+			// Calcular monto total según documentación
+			const nuevoTotal = precioBase + (incluye ? 10 : 0);
+			
+			// Si incluye anualidad, el monto mínimo debe ser el total
+			// Según documentación: durante registro con anualidad se debe pagar el monto completo
+			if (incluye) {
+				updateField('monto', nuevoTotal.toString());
+				// Actualizar también el min del campo monto
+				if (data.monto && parseFloat(data.monto) < nuevoTotal) {
+					updateField('monto', nuevoTotal.toString());
+				}
+			} else {
+				updateField('monto', precioBase.toString());
+			}
+		}
+	}
+
+	// Función específica para el evento del checkbox (para clientes nuevos)
+	function handleCheckboxChange(event: Event) {
+		const target = event.target as HTMLInputElement;
+		const value = target.checked;
+		handleAnualidadChange(value, value ? 10 : 0);
+	}
+
+	// Validación estricta: si incluye anualidad, monto no puede ser menor al total
+	$: montoMinimo = incluyeAnualidad ? precioTotal : precioBase;
+	
+	// Actualizar campo de monto cuando cambie el plan o la anualidad
+	$: {
+		if (updateField && precioTotal > 0) {
+			// Si incluye anualidad, forzar el monto completo
+			if (incluyeAnualidad) {
+				updateField('monto', precioTotal.toString());
+			} else if (!data.monto || parseFloat(data.monto) === 0) {
+				updateField('monto', precioBase.toString());
+			}
+		}
+	}
 </script>
 
 <div class="space-y-4">
@@ -58,10 +109,79 @@
 					/>
 				</div>
 				<p class="text-sm text-gray-500">Calculado automáticamente según el plan</p>
+			</div>		</FormRow>
+				<!-- Campos de pago con componente modular -->
+		{#if clienteId}
+			<CuotaAnualidadField
+				{clienteId}
+				montoPlan={precioBase}
+				bind:incluyeAnualidad
+				{cuotasPendientes}
+				onAnualidadChange={handleAnualidadChange}
+				{updateField}
+			/>		{:else}
+			<!-- Para clientes nuevos, mostrar versión simplificada con opciones de plan solo o plan + anualidad -->
+			<div class="space-y-4">
+				<div class="rounded-md bg-blue-50 p-4 border border-blue-200">
+					<h4 class="font-medium text-blue-800 mb-3">Opciones de pago</h4>
+					
+					<!-- Opción 1: Solo Plan -->
+					<div class="space-y-3">
+						<label class="flex items-start space-x-3 cursor-pointer">
+							<input
+								type="radio"
+								name="tipoPago"
+								value="solo-plan"
+								checked={!incluyeAnualidad}
+								on:change={() => handleAnualidadChange(false, 0)}
+								class="mt-1 h-4 w-4 text-[var(--primary)] focus:ring-[var(--primary)]"
+							/>
+							<div class="flex-1">
+								<div class="font-medium text-blue-900">Solo Plan ({planSeleccionado?.nombre || 'seleccionado'})</div>
+								<div class="text-sm text-blue-700">
+									{cuotaMantenimientoUtils.formatearMonto(precioBase)}
+								</div>
+								<div class="text-xs text-blue-600 mt-1">
+									El cliente pagará la cuota de mantenimiento anual por separado cuando corresponda.
+								</div>
+							</div>
+						</label>
+						
+						<!-- Opción 2: Plan + Anualidad -->
+						<label class="flex items-start space-x-3 cursor-pointer">
+							<input
+								type="radio"
+								name="tipoPago"
+								value="plan-anualidad"
+								checked={incluyeAnualidad}
+								on:change={() => handleAnualidadChange(true, 10)}
+								class="mt-1 h-4 w-4 text-[var(--primary)] focus:ring-[var(--primary)]"
+							/>
+							<div class="flex-1">
+								<div class="font-medium text-blue-900">Plan + Cuota de Mantenimiento Anual</div>
+								<div class="text-sm text-blue-700">
+									{cuotaMantenimientoUtils.formatearMonto(precioBase)} + {cuotaMantenimientoUtils.formatearMonto(10)} = {cuotaMantenimientoUtils.formatearMonto(precioTotal)}
+								</div>
+								<div class="text-xs text-blue-600 mt-1">
+									Incluye el plan y la cuota de mantenimiento anual ($10.00).
+								</div>
+							</div>
+						</label>
+					</div>
+				</div>
+				
+				<!-- Resumen del total seleccionado -->
+				<div class="rounded-md bg-green-50 p-3 border border-green-200">
+					<p class="font-medium text-green-800">Total a pagar:</p>
+					<p class="text-lg font-bold text-green-900">{cuotaMantenimientoUtils.formatearMonto(precioTotal)}</p>
+					{#if incluyeAnualidad}
+						<p class="text-xs text-green-700 mt-1">
+							Incluye plan ({cuotaMantenimientoUtils.formatearMonto(precioBase)}) + cuota anual ({cuotaMantenimientoUtils.formatearMonto(10)})
+						</p>
+					{/if}
+				</div>
 			</div>
-		</FormRow>
-
-		<!-- Campos de pago -->
+		{/if}
 		<FormRow>
 			<FormField
 				name="monto"
@@ -69,15 +189,16 @@
 				type="number"
 				placeholder={precioTotal ? `${precioTotal.toFixed(2)}` : '0.00'}
 				unit="$"
-				min={0}
+				min={montoMinimo}
 				max={precioTotal}
 				step="0.01"
-				helperText={annualFee > 0 
-					? `Precio del plan: $${precioBase.toFixed(2)} + Renovación anual: $${annualFee.toFixed(2)} = Total: $${precioTotal.toFixed(2)}. Si no especificas un monto, se tomará el precio completo.`
-					: `Precio del plan: $${precioBase.toFixed(2)}. Si no especificas un monto, se tomará el precio completo.`}
+				helperText={incluyeAnualidad 
+					? `Con anualidad el monto mínimo es: $${montoMinimo.toFixed(2)} (pago completo requerido)`
+					: `Total a pagar: $${precioTotal.toFixed(2)}. Puedes ajustar el monto si el pago es parcial.`}
 				bind:value={data.monto}
 				{errors}
 				{touched}
+				disabled={incluyeAnualidad} 
 			/>
 			<FormField
 				name="referencia"

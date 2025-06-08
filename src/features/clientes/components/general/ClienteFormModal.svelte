@@ -169,10 +169,9 @@
 				'pecho',
 				'cintura',
 				'cuello'
-			];
-		} else {
+			];		} else {
 			// AGREGAMOS LOS NUEVOS CAMPOS DE PAGO AL STEP 3
-			return ['fechaInicio', 'monto', 'referencia', 'observaciones'];
+			return ['fechaInicio', 'monto', 'referencia', 'observaciones', 'incluyeAnualidad', 'montoAnualidad'];
 		}
 	}
 	async function submitFormLogic(formData: ClienteFormData) {
@@ -214,13 +213,13 @@
 				inscripcion: {
 					idPlan: parseInt(formData.idPlan as string, 10),
 					fechaInicio: formData.fechaInicio as string,
-					fechaFin: planService.calcularFechaFin(formData.fechaInicio as string, duracionMeses)
-				},
-				// AGREGAMOS EL OBJETO PAGO
+					fechaFin: planService.calcularFechaFin(formData.fechaInicio as string, duracionMeses)				},				// AGREGAMOS EL OBJETO PAGO CON CAMPOS DE ANUALIDAD
 				pago: {
 					monto: formData.monto ? Number(formData.monto) : undefined,
 					referencia: formData.referencia ? String(formData.referencia) : undefined,
-					observaciones: formData.observaciones ? String(formData.observaciones) : undefined
+					observaciones: formData.observaciones ? String(formData.observaciones) : undefined,
+					incluyeAnualidad: Boolean(formData.incluyeAnualidad ?? true),
+					montoAnualidad: Boolean(formData.incluyeAnualidad ?? true) ? 10 : 0
 				}
 			};
 

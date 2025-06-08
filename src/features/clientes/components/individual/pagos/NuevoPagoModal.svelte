@@ -4,64 +4,45 @@
 	import { onMount } from 'svelte';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import FormField from '$lib/components/ui/forms/FormField.svelte';
-	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
 	import { pagoService, type RenovacionPlanDTO, type PagoDTO } from '../../../../pagos/api';
 	import { planService, type Plan } from '../../../../planes/api';
 	import type { Cliente } from '../../../api';
 	import { toasts } from '$lib/stores/toastStore';
 	import { calculateTotalPrice, shouldApplyAnnualFee } from '../../../forms/validation';
-	import * as yup from 'yup';
+	
+	// Importar componentes modulares de pagos
+	import { createPagoStore, createRenovacionValidator, pagoUtils } from '../../../../pagos/composables/pagoComposables';
+	import PagoFormFields from '../../../../pagos/forms/PagoFormFields.svelte';
+	import { nuevoPagoValidationSchema } from '../../../../pagos/forms/validationSchemas';
+	
+	// Importar modular cuotas-mantenimiento
+	import { createCuotaMantenimientoStore, cuotaMantenimientoUtils } from '../../../../cuotas-mantenimiento/composables/cuotaMantenimientoComposables';
+	import CuotaAnualidadField from '../../../../cuotas-mantenimiento/components/CuotaAnualidadField.svelte';
+	import { cuotaMantenimientoService } from '../../../../cuotas-mantenimiento/api';
 
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let planActualId: number | undefined = undefined;
 	export let isRenovacion = false;
 	export let onClose: () => void = () => {};
-	export let onSuccess: () => void = () => {};
+	export let onSuccess: () => void = () => {};	// Estados usando composables
+	const pagoStore = createPagoStore(cliente.idCliente);
+	const renovacionValidator = createRenovacionValidator(cliente);
+	const cuotaMantenimientoStore = createCuotaMantenimientoStore(cliente.idCliente);
+	
+	// Destructurar stores para acceso reactivo
+	const { tieneDeudaActiva: pagoStoreState, pagos: pagosStore } = pagoStore;
+	const { puedeRenovar: renovacionState } = renovacionValidator;
+	const { cuotasPendientes, isLoading: cuotasLoading } = cuotaMantenimientoStore;
+	
 	let planes: Plan[] = [];
 	let planSeleccionado: Plan | null = null;
-	let historialPagos: PagoDTO[] = [];
-	let tieneDeudaActiva = false;
 	let isSubmitting = false;
-	let puedeRenovar: { puede: boolean; mensaje: string; diasRestantes: number } = {
-		puede: true,
-		mensaje: '',
-		diasRestantes: 0
-	};
-
-	// Esquema de validación actualizado según documentación
-	const validationSchema = yup.object({
-		idPlan: yup.string().required('Debe seleccionar un plan'),
-		metodoPago: yup.string().nullable(),
-		monto: yup
-			.number()
-			.nullable()
-			.min(1, 'El monto debe ser mayor a $1.00')
-			.test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
-				if (!value) return true;
-				const decimal = value.toString().split('.')[1];
-				return !decimal || decimal.length <= 2;
-			})			.test(
-				'max-amount',
-				'El monto no puede exceder el precio del plan + renovación',
-				function (value) {
-					const { idPlan } = this.parent;
-					if (!value || !idPlan) return true;
-					const plan = planes.find((p) => p.idPlan === parseInt(idPlan));
-					const precioTotal = plan ? calculateTotalPrice(plan.precio, historialPagos, false) : 0;
-					return value <= precioTotal;
-				}
-			),
-		fechaInicio: yup.string().nullable(),
-		referencia: yup.string().nullable(),
-		observaciones: yup
-			.string()
-			.max(150, 'Las observaciones no pueden exceder 150 caracteres')
-			.nullable()
-	});
-
-	// Configuración del formulario
+	
+	// Estados para cuotas de mantenimiento
+	let incluyeAnualidad: boolean = false;
+	let montoDesglose: { plan: number; anualidad: number; cuotasPendientes: number } | null = null;
+	// Configuración del formulario usando esquema modular
 	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			idPlan: planActualId?.toString() || '',
@@ -71,78 +52,13 @@
 			referencia: '',
 			observaciones: ''
 		},
-		// validationSchema, // Se remueve de aquí
-		onSubmit: async (values) => {
-			// Se reemplazará por handleSubmitForm
-			// Verificar si tiene deuda activa
-			if (tieneDeudaActiva) {
-				toasts.showToast(
-					'No se puede registrar un nuevo pago mientras haya deuda pendiente. Complete el pago anterior primero.',
-					'error'
-				);
-				return;
-			}
-
-			// Verificar si puede renovar (solo para renovaciones)
-			if (isRenovacion && !puedeRenovar.puede) {
-				toasts.showToast(puedeRenovar.mensaje, 'error');
-				return;
-			}
-
-			isSubmitting = true;
-			try {
-				// Preparar datos según documentación API
-				const renovacionData: RenovacionPlanDTO = {
-					idCliente: cliente.idCliente,
-					idPlan: parseInt(values.idPlan),
-					metodoPago: (values.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta') || undefined,
-					monto: values.monto ? parseFloat(values.monto.toString()) : undefined,
-					fechaInicio: values.fechaInicio || undefined,
-					referencia: values.referencia || undefined,
-					observaciones: values.observaciones || undefined
-				};
-
-				const response = await pagoService.renovarPlan(renovacionData);
-
-				// Mostrar mensaje de éxito según la documentación
-				if (response.datos.pago.estado === 'Completado') {
-					toasts.showToast(
-						isRenovacion ? 'Plan renovado correctamente' : 'Pago registrado correctamente',
-						'success'
-					);
-				} else {
-					toasts.showToast(
-						isRenovacion ? 'Renovación registrada con pago parcial' : 'Pago parcial registrado',
-						'info'
-					);
-				}
-
-				onSuccess();
-			} catch (error: any) {
-				console.error('Error al procesar pago:', error);
-				const errorMessage = error.message || 'Error al procesar pago';
-				toasts.showToast(errorMessage, 'error');
-			} finally {
-				isSubmitting = false;
-			}
-		}
+		onSubmit: () => {} // Se manejará con handleSubmitForm
 	});
-
-	// Wrapper para updateField siguiendo el patrón del formulario principal
-	const updateFieldWrapper = (field: string, value: any) => {
-		updateField(field as keyof typeof $form, value);
-		// Force reactivity by updating the form store directly
-		form.update((current) => ({
-			...current,
-			[field]: value
-		}));
-	};
-
-	// Función de validación manual siguiendo el patrón del formulario principal
+	// Función de validación usando esquema modular
 	async function validateForm(): Promise<boolean> {
 		try {
-			await validationSchema.validate($form, { abortEarly: false });
-			// Si la validación pasa, limpiar errores
+			await nuevoPagoValidationSchema.validate($form, { abortEarly: false });
+			// Limpiar errores si la validación pasa
 			const emptyErrors: Record<string, string> = {};
 			Object.keys($form).forEach((key) => (emptyErrors[key] = ''));
 			errors.set(emptyErrors);
@@ -158,29 +74,23 @@
 			} else if (yupError.path) {
 				newErrors[yupError.path] = yupError.message;
 			}
-
-			// Actualizar errores
 			errors.set(newErrors);
-
+			
 			// Marcar campos como touched
 			const newTouched: Record<string, boolean> = {};
 			Object.keys($form).forEach((key) => (newTouched[key] = true));
 			touched.set(newTouched as any);
 			return false;
 		}
-	}
-
-	// Función de submit manual
+	}	// Función de submit usando composable - ACTUALIZADO según documentación estricta
 	async function handleSubmitForm() {
 		const isValid = await validateForm();
-
 		if (!isValid) {
 			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
 			return;
 		}
-
-		// Verificar si tiene deuda activa
-		if (tieneDeudaActiva) {
+				// Verificar deuda activa usando composable
+		if ($pagoStoreState) {
 			toasts.showToast(
 				'No se puede registrar un nuevo pago mientras haya deuda pendiente. Complete el pago anterior primero.',
 				'error'
@@ -188,82 +98,80 @@
 			return;
 		}
 
-		// Verificar si puede renovar (solo para renovaciones)
-		if (isRenovacion && !puedeRenovar.puede) {
-			toasts.showToast(puedeRenovar.mensaje, 'error');
+		// Verificar renovación usando composable
+		if (isRenovacion && !$renovacionState.puede) {
+			toasts.showToast($renovacionState.mensaje, 'error');
 			return;
 		}
 
+		// CRÍTICO: Verificar cuotas pendientes usando endpoint específico según documentación
+		if (isRenovacion) {
+			try {
+				const cuotasResponse = await cuotaMantenimientoService.tieneCuotasPendientes(cliente.idCliente);
+				if (cuotasResponse.tienePendientes) {
+					const totalCuotasPendientes = $cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+					const montoMinimo = (planSeleccionado?.precio || 0) + totalCuotasPendientes + (incluyeAnualidad ? 10 : 0);
+					const montoIngresado = parseFloat($form.monto);
+
+					if (montoIngresado < montoMinimo) {
+						toasts.showToast(
+							`Para renovar debe pagar un mínimo de $${montoMinimo.toFixed(2)} (plan + cuotas pendientes${incluyeAnualidad ? ' + anualidad' : ''})`,
+							'error'
+						);
+						return;
+					}
+				}
+			} catch (error) {
+				console.error('Error al verificar cuotas pendientes:', error);
+				toasts.showToast('Error al verificar cuotas pendientes', 'error');
+				return;
+			}		}
+
 		isSubmitting = true;
-		try {
-			// Preparar datos según documentación API
-			const renovacionData: RenovacionPlanDTO = {
-				idCliente: cliente.idCliente,
-				idPlan: parseInt($form.idPlan),
-				metodoPago: ($form.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta') || undefined,
-				monto: $form.monto ? parseFloat($form.monto.toString()) : undefined,
-				fechaInicio: $form.fechaInicio || undefined,
-				referencia: $form.referencia || undefined,
-				observaciones: $form.observaciones || undefined
-			};
 
-			const response = await pagoService.renovarPlan(renovacionData);
+		const exito = await pagoStore.crearPago({
+			idCliente: cliente.idCliente,
+			idPlan: parseInt($form.idPlan),
+			metodoPago: ($form.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta') || undefined,
+			monto: $form.monto ? parseFloat($form.monto.toString()) : undefined,
+			fechaInicio: $form.fechaInicio || undefined,
+			referencia: $form.referencia || undefined,
+			observaciones: $form.observaciones || undefined,
+			// Campos para cuotas de mantenimiento actualizados
+			incluyeAnualidad: incluyeAnualidad,
+			pagaCuotasPendientes: $cuotasPendientes.length > 0,
+			cuotasPorPagar: $cuotasPendientes.length > 0 ? $cuotasPendientes.map(cuota => cuota.idCuota).filter((id): id is number => id !== undefined) : undefined
+		});
 
-			// Mostrar mensaje de éxito según la documentación
-			if (response.datos.pago.estado === 'Completado') {
-				toasts.showToast(
-					isRenovacion ? 'Plan renovado correctamente' : 'Pago registrado correctamente',
-					'success'
-				);
-			} else {
-				toasts.showToast(
-					isRenovacion ? 'Renovación registrada con pago parcial' : 'Pago parcial registrado',
-					'info'
-				);
-			}
-
+		if (exito) {
 			onSuccess();
-		} catch (error: any) {
-			console.error('Error al procesar pago:', error);
-			const errorMessage = error.message || 'Error al procesar pago';
-			toasts.showToast(errorMessage, 'error');		} finally {
-			isSubmitting = false;
 		}
-	}
-
-	// Cargar datos iniciales
+		isSubmitting = false;
+	}// Cargar datos iniciales usando composables
 	onMount(async () => {
 		try {
 			const planesData = await planService.getPlanes();
 			planes = planesData;
 
-			// Cargar historial de pagos del cliente
-			historialPagos = await pagoService.getPagosByCliente(cliente.idCliente);
+			// Cargar datos usando composables
+			await pagoStore.cargarPagos();
+			await pagoStore.verificarDeudaActiva();
+			
+			if (isRenovacion) {
+				await renovacionValidator.validarRenovacion();
+			}			// Cargar cuotas de mantenimiento pendientes usando store modular
+			await cuotaMantenimientoStore.cargarCuotas();
 
 			// Si hay un plan actual, seleccionarlo por defecto
 			if (planActualId) {
 				const plan = planesData.find((p) => p.idPlan === planActualId);
 				planSeleccionado = plan || null;
 			}
-
-			// Verificar si tiene deuda activa
-			tieneDeudaActiva = await pagoService.clienteTieneDeudaPendiente(cliente.idCliente);
-
-			// Verificar si puede renovar (solo para renovaciones)
-			if (isRenovacion) {
-				const resp = await pagoService.puedeRenovarPlan(cliente.idCliente);
-				puedeRenovar = {
-					puede: resp.puede,
-					mensaje: resp.mensaje,
-					diasRestantes: resp.diasRestantes ?? 0
-				};
-			}
 		} catch (error) {
 			console.error('Error al cargar datos:', error);
 			toasts.showToast('Error al cargar información', 'error');
 		}
 	});
-
 	// Calcular año de renovación según documentación
 	function calcularAñoRenovacion(): number {
 		if (!cliente.inscripciones || cliente.inscripciones.length === 0) {
@@ -285,21 +193,64 @@
 	function handlePlanChange(idPlan: string) {
 		const plan = planes.find((p) => p.idPlan === parseInt(idPlan));
 		planSeleccionado = plan || null;
-	}
-
-	// Calcular fecha de fin
-	function calcularFechaFin(fechaInicio: string, duracionMeses: number): string {
-		if (!fechaInicio) return '';
-		const fecha = new Date(fechaInicio);
-		fecha.setMonth(fecha.getMonth() + duracionMeses);
-		return fecha.toISOString().split('T')[0];
-	}
-	// Calcular precio total con renovación anual según documentación
+	}	// Calcular precio total con renovación anual usando utils - ACTUALIZADO para cuotas pendientes
 	function getPrecioTotal(): number {
 		if (!planSeleccionado) return 0;
-		return calculateTotalPrice(planSeleccionado.precio, historialPagos, false);
+		
+		// Si hay desglose disponible, usar ese total
+		if (montoDesglose) {
+			return montoDesglose.plan + montoDesglose.anualidad + montoDesglose.cuotasPendientes;
+		}
+		
+		// Cálculo manual para renovaciones con cuotas pendientes
+		let total = planSeleccionado.precio;
+		
+		// Agregar anualidad si está seleccionada
+		if (incluyeAnualidad) {
+			total += 10;
+		}
+		
+		// Agregar cuotas pendientes si existen
+		if ($cuotasPendientes.length > 0) {
+			total += $cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+		}
+		
+		return total;
 	}
 
+	// Manejar cambio en el checkbox de anualidad
+	function handleAnualidadChange(incluye: boolean) {
+		incluyeAnualidad = incluye;
+		calcularDesglose();
+	}
+
+	// Wrapper para updateField
+	function updateFieldWrapper(field: string, value: any) {
+		form.update((current) => ({
+			...current,
+			[field]: value
+		}));
+	}
+
+	// Calcular desglose cuando cambie el plan o la anualidad
+	async function calcularDesglose() {
+		if (!planSeleccionado) {
+			montoDesglose = null;
+			return;
+		}
+
+		try {
+			const resultado = await pagoService.calcularMontoTotalConCuotas(
+				cliente.idCliente,
+				planSeleccionado.idPlan,
+				incluyeAnualidad
+			);
+			montoDesglose = resultado.desglose;
+		} catch (error) {
+			console.warn('Error al calcular desglose:', error);
+			montoDesglose = null;
+		}
+	}
 	$: añoRenovacion = calcularAñoRenovacion();
 	$: caracteresRestantes = 150 - ($form.observaciones?.length || 0);
 	$: precioTotal = getPrecioTotal();
@@ -308,6 +259,11 @@
 	$: if ($form.idPlan) {
 		handlePlanChange($form.idPlan);
 	}
+
+	// Reactivo: calcular desglose cuando cambie el plan o la anualidad
+	$: if (planSeleccionado || incluyeAnualidad) {
+		calcularDesglose();
+	}
 </script>
 
 <BaseModal {isOpen} {onClose} size="lg" closeOnClickOutside={false}>
@@ -315,9 +271,7 @@
 		<h3 class="text-lg font-semibold">
 			{isRenovacion ? 'Renovar Plan' : 'Nuevo Pago'}
 		</h3>
-	</svelte:fragment>
-
-	{#if tieneDeudaActiva}
+	</svelte:fragment>	{#if $pagoStoreState}
 		<div class="p-6 text-center">
 			<div class="mb-4 rounded-md border border-yellow-300 bg-yellow-100 p-4">
 				<h3 class="mb-2 font-bold text-yellow-800">⚠️ Deuda Activa Detectada</h3>
@@ -327,181 +281,85 @@
 				</p>
 			</div>
 		</div>
-	{:else if isRenovacion && !puedeRenovar.puede}
+	{:else if isRenovacion && !$renovacionState.puede}
 		<div class="p-6 text-center">
 			<div class="mb-4 rounded-md border border-red-300 bg-red-100 p-4">
 				<h3 class="mb-2 font-bold text-red-800">❌ Renovación No Permitida</h3>
-				<p class="text-red-700">{puedeRenovar.mensaje}</p>
-				{#if puedeRenovar.diasRestantes && puedeRenovar.diasRestantes > 5}
+				<p class="text-red-700">{$renovacionState.mensaje}</p>
+				{#if $renovacionState.diasRestantes && $renovacionState.diasRestantes > 5}
 					<p class="mt-2 text-sm text-red-600">
 						Podrás renovar cuando falten 5 días o menos para el vencimiento.
 					</p>
 				{/if}
 			</div>
-		</div>
-	{:else}
+		</div>{:else}
 		<form on:submit|preventDefault={handleSubmitForm}>
-			<div class="space-y-4">
-				<p class="mb-4 text-sm text-gray-600">
+			<div class="space-y-4">				<p class="mb-4 text-sm text-gray-600">
 					{isRenovacion ? 'Renovar membresía para' : 'Registrar nuevo pago para'}
 					<strong>{cliente.nombre} {cliente.apellido}</strong>
-				</p>
-
-				<!-- Información de renovación anual según documentación -->
-				<div class="rounded-md border border-blue-200 bg-blue-50 p-4">
-					<h4 class="mb-2 font-bold text-blue-800">💰 Renovación Anual {añoRenovacion}</h4>
-					<p class="text-sm text-blue-700">
-						Se incluye automáticamente un cargo de <strong>$10.00</strong> por renovación anual para
-						mantenimiento de máquinas (año {añoRenovacion}).
-					</p>
-				</div>
-
-				{#if isRenovacion && puedeRenovar.diasRestantes !== undefined}
+				</p>				{#if isRenovacion && $renovacionState.diasRestantes !== undefined}
 					<div class="rounded-md border border-green-200 bg-green-50 p-4">
 						<h4 class="mb-2 font-bold text-green-800">✅ Renovación Permitida</h4>
 						<p class="text-sm text-green-700">
-							La membresía actual vence en <strong>{puedeRenovar.diasRestantes}</strong> días. Puedes
+							La membresía actual vence en <strong>{$renovacionState.diasRestantes}</strong> días. Puedes
 							proceder con la renovación.
 						</p>
 					</div>
 				{/if}
 
-				<FormRow>
-					<FormField
-						name="idPlan"
-						label="Plan"
-						type="select"
-						options={[
-							{ value: '', label: 'Seleccionar plan' },
-							...planes.map((plan) => ({
-								value: plan.idPlan.toString(),
-								label: `${plan.nombre} (${plan.duracionMeses} ${
-									plan.duracionMeses === 1 ? 'mes' : 'meses'
-								}) - $${plan.precio.toFixed(2)}`
-							}))
-						]}
-						bind:value={$form.idPlan}
-						errors={$errors}
-						touched={$touched}
-					/>
-					<FormField
-						name="metodoPago"
-						label="Método de pago (Opcional)"
-						type="select"
-						options={[
-							{ value: '', label: 'No especificar' },
-							{ value: 'Efectivo', label: 'Efectivo' },
-							{ value: 'Transferencia', label: 'Transferencia' },
-							{ value: 'Tarjeta', label: 'Tarjeta de crédito/débito' }
-						]}
-						bind:value={$form.metodoPago}
-						errors={$errors}
-						touched={$touched}
-					/>
-				</FormRow>
-
-				<FormRow>
-					<FormField
-						name="monto"
-						label="Monto a pagar (Opcional)"
-						type="number"
-						placeholder={precioTotal.toFixed(2)}						helperText={planSeleccionado
-							? (() => {
-								const annualFee = precioTotal - planSeleccionado.precio;
-								return annualFee > 0 
-									? `Plan: $${planSeleccionado.precio.toFixed(2)} + Renovación anual: $${annualFee.toFixed(2)} = Total: $${precioTotal.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`
-									: `Plan: $${planSeleccionado.precio.toFixed(2)}. No se aplica fee anual este año. Si no especificas monto, se tomará el precio completo.`;
-							})()
-							: 'Seleccione un plan para ver el precio total'}
-						unit="$"
-						min={1}
-						max={precioTotal}
-						step="0.01"
-						bind:value={$form.monto}
-						errors={$errors}
-						touched={$touched}
-					/>
-					<FormField
-						name="fechaInicio"
-						label="Fecha de inicio (Opcional)"
-						type="date"
-						helperText="Si no se especifica, se usará la fecha actual"
-						bind:value={$form.fechaInicio}
-						errors={$errors}
-						touched={$touched}
-					/>
-				</FormRow>
-
-				{#if $form.metodoPago === 'Transferencia'}
-					<FormRow>
-						<FormField
-							name="referencia"
-							label="Referencia de transferencia"
-							placeholder="Ej: TRF-123456"
-							bind:value={$form.referencia}
-							errors={$errors}
-							touched={$touched}
-						/>
-						<div></div>
-					</FormRow>
-				{/if}
-
-				<div class="w-full space-y-1.5">
-					<!-- svelte-ignore a11y_label_has_associated_control -->
-					<label class="text-md font-bold text-[var(--letter)]">Observaciones (Opcional)</label>
-					<textarea
-						name="observaciones"
-						bind:value={$form.observaciones}
-						class="flex min-h-[80px] w-full rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 text-base focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-						placeholder="Comentarios adicionales sobre el pago..."
-						maxlength="150"
-					></textarea>
-					<p class={`text-sm ${caracteresRestantes < 10 ? 'text-red-500' : 'text-gray-500'}`}>
-						{caracteresRestantes} caracteres restantes
-					</p>
-				</div>
-
-				<!-- Resumen del pago -->
-				{#if planSeleccionado && $form.fechaInicio}
-					<div class="mt-6 rounded-md bg-gray-50 p-4">
-						<h3 class="mb-2 font-semibold">
-							Resumen del {isRenovacion ? 'renovación' : 'pago'}:
-						</h3>
-						<div class="space-y-1 text-sm text-gray-600">
-							<p>Plan: {planSeleccionado.nombre}</p>
-							<p>
-								Duración: {planSeleccionado.duracionMeses}
-								{planSeleccionado.duracionMeses === 1 ? 'mes' : 'meses'}
+				<!-- Advertencia sobre cuotas pendientes -->
+				{#if isRenovacion && $cuotasPendientes.length > 0}
+					<div class="rounded-md border border-orange-200 bg-orange-50 p-4">
+						<h4 class="mb-2 font-bold text-orange-800">⚠️ Cuotas de Mantenimiento Pendientes</h4>
+						<p class="text-sm text-orange-700 mb-2">
+							Este cliente tiene <strong>{$cuotasPendientes.length}</strong> cuota{$cuotasPendientes.length > 1 ? 's' : ''} de mantenimiento pendiente{$cuotasPendientes.length > 1 ? 's' : ''}:
+						</p>
+						<ul class="text-sm text-orange-700 space-y-1">
+							{#each $cuotasPendientes as cuota}
+								<li class="flex justify-between">
+									<span>• Año {cuota.anio}</span>
+									<span class="font-medium">${cuota.monto.toFixed(2)}</span>
+								</li>
+							{/each}
+						</ul>
+						<div class="mt-2 pt-2 border-t border-orange-200">
+							<p class="text-sm font-medium text-orange-800">
+								Total cuotas pendientes: <span class="font-bold">${$cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0).toFixed(2)}</span>
 							</p>
-							<div class="mt-2 border-t pt-2">
-								<p>Precio del plan: ${planSeleccionado.precio.toFixed(2)}</p>
-								<p>Renovación anual {añoRenovacion}: $10.00</p>
-								<p class="font-bold">Total: ${precioTotal.toFixed(2)}</p>
-								<p>Monto a pagar: ${$form.monto || precioTotal.toFixed(2)}</p>
-								{#if !$form.monto}
-									<p class="text-xs text-blue-600">
-										(Se tomará el precio completo automáticamente)
-									</p>
-								{:else if parseFloat($form.monto.toString()) < precioTotal}
-									<p class="font-medium text-yellow-600">
-										Restante: ${(precioTotal - parseFloat($form.monto.toString())).toFixed(2)}
-										(Pago será marcado como Pendiente)
-									</p>
-								{/if}
-							</div>
-							<p>Fecha de inicio: {$form.fechaInicio}</p>
-							<p>
-								Fecha de fin: {calcularFechaFin($form.fechaInicio, planSeleccionado.duracionMeses)}
+							<p class="text-xs text-orange-600 mt-1">
+								Para renovar se debe incluir el pago de estas cuotas pendientes.
 							</p>
 						</div>
 					</div>
-				{/if}
+				{/if}<!-- Componente modular para cuotas de mantenimiento -->
+				<CuotaAnualidadField
+					clienteId={cliente.idCliente}
+					montoPlan={planSeleccionado?.precio || 0}
+					bind:incluyeAnualidad
+					cuotasPendientes={$cuotasPendientes}
+					onAnualidadChange={handleAnualidadChange}
+					updateField={updateFieldWrapper}
+				/>
+
+				<!-- Usar componente modular de formulario -->
+				<PagoFormFields 
+					bind:form={$form}
+					{planes}
+					{planSeleccionado}
+					{precioTotal}
+					{caracteresRestantes}
+					errors={$errors}
+					touched={$touched}
+					{isRenovacion}
+					{añoRenovacion}
+					bind:incluyeAnualidad
+					cuotasPendientes={$cuotasPendientes}
+					{montoDesglose}
+				/>
 			</div>
 		</form>
-	{/if}
-
-	<svelte:fragment slot="footer">
-		{#if tieneDeudaActiva || (isRenovacion && !puedeRenovar.puede)}
+	{/if}	<svelte:fragment slot="footer">
+		{#if $pagoStoreState || (isRenovacion && !$renovacionState.puede)}
 			<Button variant="primary" on:click={onClose}>Entendido</Button>
 		{:else}
 			<Button variant="outline" on:click={onClose} type="button">Cancelar</Button>

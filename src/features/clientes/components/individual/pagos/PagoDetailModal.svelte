@@ -6,44 +6,32 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
-	import { pagoService, type PagoDTO } from '../../../../pagos/api';
+	import type { PagoDTO } from '../../../../pagos/api';
+	import { pagoService } from '../../../../pagos/api';
 	import type { Cliente } from '../../../api';
 	import { toasts } from '$lib/stores/toastStore';
-	import * as yup from 'yup';
+	// Importar componentes modulares
+	import { createPagoStore, pagoUtils } from '../../../../pagos/composables/pagoComposables';
+	import { editarPagoValidationSchema } from '../../../../pagos/forms/validationSchemas';
+	import PagoResumen from '../../../../pagos/components/PagoResumen.svelte';
+	import PagoEstadoChip from '../../../../pagos/components/PagoEstadoChip.svelte';
+	import MetodoPagoChip from '../../../../pagos/components/MetodoPagoChip.svelte';
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let pago: PagoDTO;
 	export let canEdit = true; // Nueva prop para controlar si se puede editar
 	export let onClose: () => void = () => {};
 	export let onSuccess: () => void = () => {};
+	export let cuotasPendientesGlobales: any[] = []; // NUEVO: Para identificación mejorada// Estados usando composable
+	const pagoStore = createPagoStore(cliente.idCliente);
+	// Alias para la validación
+	const validationSchema = editarPagoValidationSchema;
 
 	let isEditing = false;
 	let isSubmitting = false;
-	let showDeleteConfirm = false;	// Esquema de validación
-	const validationSchema = yup.object({
-		monto: yup.number()
-			.required('El monto es requerido')
-			.min(1, 'El monto debe ser mayor a $1.00')
-			.test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
-				if (!value) return true;
-				const decimal = value.toString().split('.')[1];
-				return !decimal || decimal.length <= 2;
-			})
-			.test('max-amount', 'El monto no puede exceder el precio del plan + renovación anual ($10)', (value) => {
-				if (!value) return true;
-				const plan = pago.inscripcion?.plan;
-				if (!plan) return true;
-				const precioTotal = plan.precio + 10; // Plan + $10 renovación anual
-				return value <= precioTotal;
-			}),
-		metodoPago: yup.string().nullable(),
-		estado: yup.string().required('El estado es requerido'),
-		referencia: yup.string().nullable(),
-		observaciones: yup
-			.string()
-			.max(150, 'Las observaciones no pueden exceder 150 caracteres')
-			.nullable()
-	});// Configuración del formulario con valores iniciales del pago (sin validationSchema para manejar validación manual)
+	let showDeleteConfirm = false;
+
+	// Configuración del formulario con valores iniciales del pago
 	const { form, errors, touched, updateField } = createForm({
 		initialValues: {
 			monto: pago.monto.toString(),
@@ -95,8 +83,7 @@
 			return false;
 		}
 	}
-
-	// Función de submit manual
+	// Función de submit manual - ACTUALIZADA para manejar restricciones de anualidad
 	async function handleSubmitForm() {
 		const isValid = await validateForm();
 
@@ -104,8 +91,22 @@
 			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
 			return;
 		}
+		// Validación adicional para pagos con anualidad según documentación estricta
+		if (pagoService.identificarPagoConCuotas(pago)) {
+			const montoIngresado = parseFloat($form.monto);
+			const montoPlan = pago.inscripcion?.plan?.precio || 0;
 
-		isSubmitting = true;		try {
+			if (montoIngresado < montoPlan) {
+				toasts.showToast(
+					`El monto del plan no puede ser menor a $${montoPlan.toFixed(2)}`,
+					'error'
+				);
+				return;
+			}
+		}
+
+		isSubmitting = true;
+		try {
 			const pagoData = {
 				monto: parseFloat($form.monto),
 				metodoPago: $form.metodoPago as 'Efectivo' | 'Transferencia' | 'Tarjeta' | undefined,
@@ -114,7 +115,7 @@
 				observaciones: $form.observaciones || undefined
 			};
 
-			await pagoService.updatePago(pago.idPago!, pagoData);
+			await pagoStore.actualizarPago(pago.idPago!, pagoData);
 			toasts.showToast('Pago actualizado correctamente', 'success');
 			isEditing = false;
 			onSuccess();
@@ -125,31 +126,26 @@
 			isSubmitting = false;
 		}
 	}
+	// Formatear fecha usando utilidad
+	const formatDate = pagoUtils.formatearFecha;
 
-	// Formatear fecha
-	function formatDate(dateString: string): string {
-		return new Date(dateString).toLocaleDateString('es-ES', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
+	// Función para eliminar pago
+	async function handleDelete() {
+		isSubmitting = true;
+		try {
+			await pagoStore.eliminarPago(pago.idPago!);
+			toasts.showToast('Pago eliminado correctamente', 'success');
+			onSuccess();
+		} catch (error) {
+			console.error('Error al eliminar pago:', error);
+			toasts.showToast('Error al eliminar pago', 'error');
+		} finally {
+			isSubmitting = false;
+			showDeleteConfirm = false;
+		}
 	}
 
-	// Determinar color del estado
-	function getEstadoColor(estado: string): string {
-		switch (estado) {
-			case 'Completado':
-				return 'bg-green-100 text-green-800';
-			case 'Pendiente':
-				return 'bg-yellow-100 text-yellow-800';
-			case 'Anulado':
-				return 'bg-red-100 text-red-800';
-			default:
-				return 'bg-gray-100 text-gray-800';
-		}
-	}	function toggleEdit() {
+	function toggleEdit() {
 		isEditing = !isEditing;
 		if (!isEditing) {
 			// Resetear valores del formulario usando el wrapper
@@ -158,23 +154,6 @@
 			updateFieldWrapper('estado', pago.estado || 'Completado');
 			updateFieldWrapper('referencia', pago.referencia || '');
 			updateFieldWrapper('observaciones', pago.observaciones || '');
-		}
-	}
-
-	async function handleDelete() {
-		isSubmitting = true;
-		try {
-			const success = await pagoService.deletePago(pago.idPago!);
-			if (success) {
-				toasts.showToast('Pago eliminado correctamente', 'success');
-				onSuccess();
-			}
-		} catch (error) {
-			console.error('Error al eliminar pago:', error);
-			toasts.showToast('Error al eliminar pago', 'error');
-		} finally {
-			isSubmitting = false;
-			showDeleteConfirm = false;
 		}
 	}
 
@@ -191,25 +170,46 @@
 				<span class="text-sm text-gray-500">
 					{formatDate(pago.fechaPago)}
 				</span>
-				
+				<PagoEstadoChip estado={pago.estado || 'Pendiente'} />
 			</div>
 		</div>
 	</svelte:fragment>
-
 	{#if isEditing}
 		<!-- MODO EDICIÓN -->
 		<form on:submit|preventDefault={handleSubmitForm}>
 			<div class="space-y-4">
 				<p class="mb-4 text-sm text-gray-600">
 					Editar pago de <strong>{cliente.nombre} {cliente.apellido}</strong>
-				</p>				<FormRow>
-					<FormField
+				</p>				<!-- Advertencia sobre restricciones de edición para pagos con anualidad según documentación -->
+				{#if pagoService.identificarPagoConCuotas(pago, cuotasPendientesGlobales)}
+					<div class="rounded-md border border-yellow-200 bg-yellow-50 p-4">
+						<h4 class="mb-2 font-bold text-yellow-800">ℹ️ Pago con Cuota de Mantenimiento</h4>
+						<p class="mb-2 text-sm text-yellow-700">
+							Este pago incluye cuota de mantenimiento anual.
+						</p>
+						<div class="text-sm text-yellow-600">
+							<p><strong>Plan:</strong> ${(pago.inscripcion?.plan?.precio || 0).toFixed(2)}</p>
+							<p>
+								<strong>Cuota anual:</strong> ${(pago.montoAnualidad || 0).toFixed(2)} (no editable)
+							</p>
+							<p><strong>Formato del monto:</strong> {pagoService.formatearPagoConCuotas(pago)}</p>
+						</div>
+						<p class="mt-2 text-xs text-yellow-600">
+							Solo puedes editar el costo del plan, no la cuota de mantenimiento.
+						</p>
+					</div>
+				{/if}
+
+				<FormRow>					<FormField
 						name="monto"
-						label="Monto"
+						label={pagoService.identificarPagoConCuotas(pago, cuotasPendientesGlobales) ? 'Monto del Plan (editable)' : 'Monto'}
 						type="number"
 						placeholder="0.00"
 						unit="$"
 						step="0.01"
+						helperText={pagoService.identificarPagoConCuotas(pago, cuotasPendientesGlobales)
+							? `Cuota anual fija: $${(pago.montoAnualidad || 0).toFixed(2)}`
+							: undefined}
 						bind:value={$form.monto}
 						errors={$errors}
 						touched={$touched}
@@ -276,71 +276,8 @@
 			<p class="mb-4 text-sm text-gray-600">
 				Detalles del pago de <strong>{cliente.nombre} {cliente.apellido}</strong>
 			</p>
-
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
-					<h4 class="mb-3 font-semibold text-gray-700">Información del Pago</h4>
-					<div class="space-y-2 text-sm">
-						<div class="flex justify-between">
-							<span class="text-gray-600">Monto:</span>
-							<span class="text-lg font-bold">${pago.monto.toFixed(2)}</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-gray-600">Método:</span>
-							<span class="font-medium">{pago.metodoPago || 'No especificado'}</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-gray-600">Estado:</span>
-							<span
-								class={`rounded-full px-2 py-1 text-xs font-medium ${getEstadoColor(pago.estado || 'Pendiente')}`}
-							>
-								{pago.estado || 'Pendiente'}
-							</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-gray-600">Tipo:</span>
-							<span
-								class={`rounded-full px-2 py-1 text-xs font-medium ${pago.esRenovacion ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}
-							>
-								{pago.esRenovacion ? 'Renovación' : 'Inscripción'}
-							</span>
-						</div>
-					</div>
-				</div>
-
-				{#if pago.inscripcion}
-					<div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
-						<h4 class="mb-3 font-semibold text-gray-700">Plan Asociado</h4>
-						<div class="space-y-2 text-sm">
-							<div class="flex justify-between">
-								<span class="text-gray-600">Plan:</span>
-								<span class="font-medium">{pago.inscripcion.plan?.nombre || 'No especificado'}</span
-								>
-							</div>
-							<div class="flex justify-between">
-								<span class="text-gray-600">Precio del plan:</span>
-								<span class="font-medium"
-									>${Number(pago.inscripcion.plan?.precio)?.toFixed(2) || '0.00'}</span
-								>
-							</div>
-							<div class="flex justify-between">
-								<span class="text-gray-600">Inicio:</span>
-								<span
-									>{pago.inscripcion.fechaInicio
-										? formatDate(pago.inscripcion.fechaInicio)
-										: '-'}</span
-								>
-							</div>
-							<div class="flex justify-between">
-								<span class="text-gray-600">Fin:</span>
-								<span
-									>{pago.inscripcion.fechaFin ? formatDate(pago.inscripcion.fechaFin) : '-'}</span
-								>
-							</div>
-						</div>
-					</div>
-				{/if}
-			</div>
+			<!-- Usar componente PagoResumen modular -->
+			<PagoResumen {pago} showPlan={true} showFechas={true} />
 
 			{#if pago.referencia}
 				<div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
@@ -379,7 +316,8 @@
 			</Button>
 			<Button variant="primary" on:click={handleSubmitForm} type="button" isLoading={isSubmitting}>
 				Guardar Cambios
-			</Button>		{:else}
+			</Button>
+		{:else}
 			<Button variant="outline" on:click={onClose}>Cerrar</Button>
 			{#if canEdit}
 				<Button variant="danger" on:click={() => (showDeleteConfirm = true)}>
@@ -391,9 +329,7 @@
 					Editar Pago
 				</Button>
 			{:else}
-				<div class="text-sm text-gray-500">
-					Solo se puede editar el pago más reciente
-				</div>
+				<div class="text-sm text-gray-500">Solo se puede editar el pago más reciente</div>
 			{/if}
 		{/if}
 	</svelte:fragment>

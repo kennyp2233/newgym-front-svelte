@@ -13,6 +13,11 @@ export interface PagoDTO {
     referencia?: string;
     observaciones?: string;
     esRenovacion?: boolean;
+    
+    // Campos para cuotas de mantenimiento
+    incluyeAnualidad?: boolean;
+    montoAnualidad?: number;
+    idCuotaMantenimiento?: number;
 
     // Relaciones con datos expandidos
     cliente?: {
@@ -46,6 +51,11 @@ export interface RenovacionPlanDTO {
     fechaInicio?: string;
     referencia?: string;
     observaciones?: string;
+    
+    // Campos para cuotas de mantenimiento
+    incluyeAnualidad?: boolean;
+    pagaCuotasPendientes?: boolean;
+    cuotasPorPagar?: number[];
 }
 
 export interface RenovacionResponse {
@@ -78,10 +88,19 @@ export interface RenovacionResponse {
     };
 }
 
-class PagoService {
-    // Renovar plan de un cliente - ACTUALIZADO según documentación
+class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según documentación
     async renovarPlan(renovacionData: RenovacionPlanDTO): Promise<RenovacionResponse> {
         try {
+            // Verificar cuotas pendientes antes de renovar
+            const { cuotaMantenimientoService } = await import('../cuotas-mantenimiento/api');
+            const cuotasPendientes = await cuotaMantenimientoService.getCuotasPendientes(renovacionData.idCliente);
+            
+            // Si hay cuotas pendientes, agregarlas al payload
+            if (cuotasPendientes.length > 0 && !renovacionData.pagaCuotasPendientes) {
+                const totalCuotasPendientes = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+                console.warn(`Cliente tiene ${cuotasPendientes.length} cuotas pendientes por $${totalCuotasPendientes.toFixed(2)}`);
+            }
+
             const response = await api.post('/pagos/renovar', renovacionData);
             return response.data;
         } catch (error: any) {
@@ -267,14 +286,17 @@ class PagoService {
             console.error('Error al obtener último pago:', error);
             return null;
         }
-    }
-
-    // Calcular monto restante de un pago - ACTUALIZADO según documentación
+    }    // Calcular monto restante de un pago - ACTUALIZADO para incluir cuotas de mantenimiento
     calcularMontoRestante(pago: PagoDTO): number {
         if (!pago.inscripcion?.plan) return 0;
 
-        // Precio del plan + $10 renovación anual (según documentación)
-        const precioTotal = pago.inscripcion.plan.precio + 10;
+        let precioTotal = pago.inscripcion.plan.precio;
+        
+        // Agregar cuota de mantenimiento si aplica según documentación
+        if (pago.incluyeAnualidad && pago.montoAnualidad) {
+            precioTotal += pago.montoAnualidad;
+        }
+        
         return Math.max(0, precioTotal - pago.monto);
     }
 
@@ -287,9 +309,7 @@ class PagoService {
             console.error('Error al obtener pagos pendientes:', error);
             return [];
         }
-    }
-
-    // Verificar si se puede renovar un plan (debe estar próximo a vencer)
+    }    // Verificar si se puede renovar un plan (debe estar próximo a vencer)
     async puedeRenovarPlan(idCliente: number): Promise<{ puede: boolean; mensaje: string; diasRestantes?: number }> {
         try {
             // Esta lógica debería estar en el backend, pero podemos hacer una verificación previa
@@ -330,6 +350,88 @@ class PagoService {
         } catch (error) {
             console.error('Error al verificar renovación:', error);
             return { puede: false, mensaje: 'Error al verificar el estado de la inscripción' };
+        }
+    }    // Calcular monto total con cuotas de mantenimiento - MEJORADO para escenarios de renovación
+    async calcularMontoTotalConCuotas(idCliente: number, idPlan: number, incluyeAnualidad: boolean = false): Promise<{ montoTotal: number; desglose: { plan: number; anualidad: number; cuotasPendientes: number } }> {
+        try {
+            // Importar servicios necesarios
+            const { cuotaMantenimientoService } = await import('../cuotas-mantenimiento/api');
+            const { planService } = await import('../planes/api');
+            
+            // Obtener precio del plan
+            const plan = await planService.getPlanById(idPlan);
+            if (!plan) throw new Error('Plan no encontrado');
+
+            const desglose = {
+                plan: plan.precio,
+                anualidad: 0,
+                cuotasPendientes: 0
+            };
+
+            // Agregar cuota anual si aplica - valor según documentación
+            if (incluyeAnualidad) {
+                desglose.anualidad = 10; // Valor estándar de anualidad
+            }
+
+            // Verificar cuotas pendientes - CRÍTICO para renovaciones
+            const cuotasPendientes = await cuotaMantenimientoService.getCuotasPendientes(idCliente);
+            if (cuotasPendientes.length > 0) {
+                desglose.cuotasPendientes = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+                console.log(`Cliente tiene ${cuotasPendientes.length} cuotas pendientes por $${desglose.cuotasPendientes.toFixed(2)}`);
+            }
+
+            const montoTotal = desglose.plan + desglose.anualidad + desglose.cuotasPendientes;
+
+            return { montoTotal, desglose };
+        } catch (error) {
+            console.error('Error al calcular monto total con cuotas:', error);
+            throw error;
+        }
+    }    // Formatear información de pago con cuotas - MEJORADO según requerimientos y documentación
+    formatearPagoConCuotas(pago: PagoDTO): string {
+        if (!pago.inscripcion?.plan) return 'Plan no especificado';
+
+        const montoPlan = pago.inscripcion.plan.precio;
+        const montoAnualidad = pago.montoAnualidad || 0;
+
+        // Formato según documentación: "${plan cost} + ${maintenance cost}"
+        if (pago.incluyeAnualidad && montoAnualidad > 0) {
+            return `$${montoPlan.toFixed(2)} + $${montoAnualidad.toFixed(2)}`;
+        }
+
+        return `$${montoPlan.toFixed(2)}`;
+    }    // Identificar si un pago tiene cuotas de mantenimiento asociadas - ACTUALIZADO según documentación
+    identificarPagoConCuotas(pago: PagoDTO, cuotasPendientesGlobales?: any[]): boolean {
+        // Verificación directa por campos del pago
+        const tieneIndicadoresCuotas = !!(pago.incluyeAnualidad || pago.montoAnualidad || pago.idCuotaMantenimiento);
+        
+        // Si hay cuotas pendientes cargadas globalmente, verificar también por asociación
+        if (cuotasPendientesGlobales && cuotasPendientesGlobales.length > 0) {
+            // Verificar si el pago coincide con alguna cuota por fecha y monto
+            const cuotaAsociada = cuotasPendientesGlobales.find(cuota => {
+                const fechaPago = new Date(pago.fechaPago).getFullYear();
+                return cuota.anio === fechaPago && cuota.monto === (pago.montoAnualidad || 10);
+            });
+            
+            if (cuotaAsociada) {
+                return true;
+            }
+        }
+        
+        return tieneIndicadoresCuotas;
+    }
+
+    // Calcular monto mínimo para renovación con cuotas pendientes - NUEVO según documentación
+    async calcularMontoMinimoRenovacion(idCliente: number, idPlan: number, incluyeAnualidad: boolean = false): Promise<{ montoMinimo: number; desglose: { plan: number; anualidad: number; cuotasPendientes: number } }> {
+        try {
+            const resultado = await this.calcularMontoTotalConCuotas(idCliente, idPlan, incluyeAnualidad);
+            return {
+                montoMinimo: resultado.montoTotal,
+                desglose: resultado.desglose
+            };
+        } catch (error) {
+            console.error('Error al calcular monto mínimo de renovación:', error);
+            throw error;
         }
     }
 }

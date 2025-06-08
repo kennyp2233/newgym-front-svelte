@@ -4,171 +4,76 @@
 	import Table from '$lib/components/ui/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
-	import { pagoService, type PagoDTO } from '../../../../pagos/api';
-	import { toasts } from '$lib/stores/toastStore';
+	import type { PagoDTO } from '../../../../pagos/api';
+	import { pagoService } from '../../../../pagos/api';
 	import type { Cliente } from '../../../api';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import PagoDetailModal from './PagoDetailModal.svelte';
 	import type { TableAction } from '$lib/components/ui/Table.svelte';
-	import { calculateTotalPrice } from '../../../forms/validation';
-
+	import { createPagoStore, pagoUtils } from '../../../../pagos/composables/pagoComposables';
+	import PagoEstadoChip from '../../../../pagos/components/PagoEstadoChip.svelte';
+	import MetodoPagoChip from '../../../../pagos/components/MetodoPagoChip.svelte';
+	import PagoResumen from '../../../../pagos/components/PagoResumen.svelte';
 	export let clienteId: number;
 	export let cliente: Cliente;
 	export let onUpdate: () => void = () => {};
 	export let key: number = 0; // Para forzar re-render desde el padre
-	let pagos: PagoDTO[] = [];
-	let isLoading = true;
+	export let cuotasPendientesGlobales: any[] = []; // NUEVO: Cuotas pendientes para identificación
+		// Estados usando el composable
+	const pagoStore = createPagoStore(clienteId);
+	const { pagos, pagosPendientes, totalPagado, isLoading } = pagoStore;
 	let showCompleteModal = false;
-	let showDetailModal = false;	let selectedPago: PagoDTO | null = null;
-
+	let showDetailModal = false;
+	let selectedPago: PagoDTO | null = null;
 	// Cargar pagos del cliente
 	onMount(async () => {
-		await fetchPagos();
+		await pagoStore.cargarPagos();
 	});
 
 	// Cargar pagos cuando cambie la key
 	$: if (clienteId && key !== undefined) {
-		fetchPagos();
-	}
-	async function fetchPagos() {
-		isLoading = true;		try {
-			const data = await pagoService.getPagosByCliente(clienteId);
-			pagos = data.sort(
-				(a, b) => new Date(b.fechaPago).getTime() - new Date(a.fechaPago).getTime()
-			);
-		} catch (error) {
-			console.error('Error al cargar pagos:', error);
-			toasts.showToast('Error al cargar el historial de pagos', 'error');
-		} finally {
-			isLoading = false;
-		}
-	}
-
-	// Formatear fecha
-	function formatDate(dateString: string): string {
-		return new Date(dateString).toLocaleDateString('es-ES', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric'
-		});
-	}
-
-	// Formatear monto
-	function formatMonto(monto: number): string {
-		return `$${Number(monto).toFixed(2)}`;
-	}
-
-	// Determinar color del estado
-	function getEstadoColor(estado: string): string {
-		switch (estado) {
-			case 'Completado':
-				return 'bg-green-100 text-green-800';
-			case 'Pendiente':
-				return 'bg-yellow-100 text-yellow-800';
-			case 'Anulado':
-				return 'bg-red-100 text-red-800';
-			default:
-				return 'bg-gray-100 text-gray-800';
-		}
-	}
-
-	// Determinar color del método de pago
-	function getMetodoPagoColor(metodo: string): string {
-		switch (metodo) {
-			case 'Efectivo':
-				return 'bg-green-100 text-green-800';
-			case 'Transferencia':
-				return 'bg-blue-100 text-blue-800';
-			case 'Tarjeta':
-				return 'bg-purple-100 text-purple-800';
-			default:
-				return 'bg-gray-100 text-gray-800';
-		}
-	}
-	// ✅ NUEVAS FUNCIONES PARA MANEJAR ACCIONES
+		pagoStore.cargarPagos();
+	}	// ✅ NUEVAS FUNCIONES PARA MANEJAR ACCIONES - Refactorizadas
 	function handleViewPago(pago: PagoDTO) {
 		selectedPago = pago;
 		showDetailModal = true;
 	}
-	function handleCompletePago(pago: PagoDTO) {
-		const montoRestante = getMontoRestante(pago, pagos);
+		function handleCompletePago(pago: PagoDTO) {
+		const montoRestante = pagoUtils.calcularMontoRestante(pago, $pagos);
 
 		if (pago.estado === 'Anulado') {
-			toasts.showToast('Este pago está anulado y no se puede completar.', 'error');
 			return;
 		}
 		
 		if (montoRestante <= 0) {
-			// This condition implies the payment is already complete or overpaid.
-			// The button should ideally be hidden by the `getTableActions` logic.
-			toasts.showToast(
-				'Este pago ya está saldado o no requiere acción adicional.',
-				'info'
-			);
 			return;
 		}
 
-		// If we reach here, there's a montoRestante > 0 and the pago is not 'Anulado'.
 		selectedPago = pago;
 		showCompleteModal = true;
 	}
 
-	// Función para determinar si un pago es el último (más reciente)
-	function isUltimoPago(pago: PagoDTO): boolean {
-		if (pagos.length === 0) return false;
-		// Ordenar por fecha y tomar el más reciente
-		const ultimoPago = pagos.reduce((latest, current) => {
-			const latestDate = new Date(latest.fechaPago);
-			const currentDate = new Date(current.fechaPago);
-			return currentDate > latestDate ? current : latest;
-		});
-		return pago.idPago === ultimoPago.idPago;
-	}	// Confirmar completar pago
+	// Confirmar completar pago - Simplificado usando el composable
 	async function confirmCompletePago() {
 		if (!selectedPago) return;
 
-		isLoading = true;
-		try {
-			const montoRestante = getMontoRestante(selectedPago, pagos);
-			const montoTotal = selectedPago.monto + montoRestante;
-
-			const updatedPago = await pagoService.updatePago(selectedPago.idPago!, {
-				monto: montoTotal,
-				estado: 'Completado',
-				observaciones: `${selectedPago.observaciones || ''}. Pago completado - Monto anterior: ${selectedPago.monto.toFixed(2)}, Monto final: ${montoTotal.toFixed(2)}`
-			});if (updatedPago) {
-				toasts.showToast('Pago completado correctamente', 'success');
-				await fetchPagos();
-				onUpdate();
-			}
-		} catch (error) {
-			console.error('Error al completar pago:', error);
-			toasts.showToast('Error al completar pago', 'error');
-		} finally {
-			isLoading = false;
-			showCompleteModal = false;
-			selectedPago = null;
+		const exito = await pagoStore.completarPago(selectedPago.idPago!);
+		if (exito) {
+			onUpdate();
 		}
-	}	// Obtener el monto restante de un pago pendiente - Hecho reactivo
-	function getMontoRestante(pago: PagoDTO, pagosList: PagoDTO[]): number {
-		if (!pago.inscripcion?.plan) return 0;
-		const precioTotal = calculateTotalPrice(pago.inscripcion.plan.precio, pagosList, false);
-		return precioTotal - pago.monto;
+		
+		showCompleteModal = false;
+		selectedPago = null;
 	}
 
 	function handleDetailSuccess() {
 		showDetailModal = false;
 		selectedPago = null;
-		// Force a complete refresh of the payment data
-		fetchPagos().then(() => {
-			onUpdate(); // This will update the parent component
-		});
-	}
-
-	// Calcular total de pagos
-	$: totalPagos = pagos.reduce((sum, pago) => sum + Number(pago.monto), 0);
+		onUpdate(); // Actualizar componente padre
+	}	// Calcular total de pagos - Usando datos del store
+	$: totalPagos = $totalPagado;
 	
-	// ✅ CONFIGURACIÓN DE ACCIONES PARA LA TABLA - Mejorada para reactividad
+	// ✅ CONFIGURACIÓN DE ACCIONES PARA LA TABLA - Simplificada
 	function getTableActions(pagosList: PagoDTO[]): TableAction<PagoDTO>[] {
 		return [
 			{
@@ -183,55 +88,41 @@
 				variant: 'success' as const,
 				onClick: handleCompletePago,
 				hidden: (pago: PagoDTO) => {
-					// Button should be hidden if the payment is fully paid (or overpaid) OR if it's annulled.
-					// Otherwise, it should be shown (if there's a remaining amount and not annulled).
-					const montoRestante = getMontoRestante(pago, pagosList);
+					const montoRestante = pagoUtils.calcularMontoRestante(pago, pagosList);
 					return montoRestante <= 0 || pago.estado === 'Anulado';
 				}
 			}
 		];
 	}
 
-	$: tableActions = getTableActions(pagos);
-
-	// Configuración de columnas para la tabla
+	$: tableActions = getTableActions($pagos);	// Configuración de columnas para la tabla - Usando componentes modulares
 	const columns = [
 		{
 			key: 'fechaPago',
 			header: 'Fecha',
-			render: (value: string) => formatDate(value)
-		},
-		{
+			render: (value: string) => pagoUtils.formatearFecha(value)		},		{
 			key: 'monto',
 			header: 'Monto',
-			render: (value: number) => formatMonto(value)
+			render: (value: number, pago: PagoDTO) => {
+				// Usar el nuevo método para identificar y formatear pagos con cuotas según documentación
+				if (pagoService.identificarPagoConCuotas(pago, cuotasPendientesGlobales)) {
+					return pagoService.formatearPagoConCuotas(pago);
+				}
+				return pagoUtils.formatearMonto(value);
+			}
 		},
 		{
 			key: 'metodoPago',
-			header: 'Método',
-			render: (value: string) => `
-        <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getMetodoPagoColor(value)}">
-          ${value || 'No especificado'}
-        </span>
-      `
+			header: 'Método'
+			// Se renderizará en el template
 		},
 		{
 			key: 'estado',
-			header: 'Estado',
-			render: (value: string) => `
-        <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getEstadoColor(value || 'Pendiente')}">
-          ${value || 'Pendiente'}
-        </span>
-      `
-		},
-		{
+			header: 'Estado'
+			// Se renderizará en el template
+		},		{
 			key: 'esRenovacion',
-			header: 'Tipo',
-			render: (value: boolean) => `
-        <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${value ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">
-          ${value ? 'Renovación' : 'Inscripción'}
-        </span>
-      `
+			header: 'Tipo'
 		},
 		{
 			key: 'referencia',
@@ -241,37 +132,87 @@
 	];
 </script>
 
-<div class="space-y-4">
-	{#if isLoading}
+<div class="space-y-4">	{#if $isLoading}
 		<div class="flex h-64 items-center justify-center">
 			<div
 				class="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent"
 			></div>
 		</div>
-	{:else if pagos.length === 0}
+	{:else if $pagos.length === 0}
 		<div class="py-10 text-center text-gray-500">No hay pagos registrados para este cliente.</div>
 	{:else}
 		<!-- Resumen de pagos -->
 		<div class="mb-6 flex items-center justify-between rounded-md bg-gray-50 p-4">
 			<div>
 				<h3 class="font-semibold text-gray-700">Total pagado:</h3>
-				<p class="text-2xl font-bold text-[var(--primary)]">{formatMonto(totalPagos)}</p>
+				<p class="text-2xl font-bold text-[var(--primary)]">{pagoUtils.formatearMonto(totalPagos)}</p>
 			</div>
 			<div class="text-right">
 				<p class="text-sm text-gray-600">Total de pagos:</p>
-				<p class="text-lg font-medium">{pagos.length}</p>
+				<p class="text-lg font-medium">{$pagos.length}</p>
 			</div>
-		</div>		<!-- ✅ TABLA CORREGIDA CON SISTEMA DE ACCIONES -->
-		<Table
-			data={pagos}
-			{columns}
-			actions={tableActions}
-			keyExtractor={(item) => item.idPago!.toString()}
-			{isLoading}
-			emptyStateMessage="No hay pagos registrados para este cliente"
-			rowClassName={() => 'bg-[var(--sections)] hover:bg-[var(--sections-hover)]'}
-			className="rounded-lg overflow-hidden"
-		/>
+		</div>		<!-- ✅ TABLA CON SISTEMA DE ACCIONES MODULAR -->
+		<div class="w-full overflow-x-auto rounded-lg">
+			<table class="w-full border-collapse bg-[var(--sections)]">
+				<thead class="bg-[var(--sections-hover)] text-left">
+					<tr>
+						{#each columns as col}
+							<th class="border-b border-[var(--border)] p-3 font-bold text-[var(--letter)]">
+								{col.header}
+							</th>
+						{/each}
+						{#if tableActions.length > 0}
+							<th class="border-b border-[var(--border)] p-3 text-right">Acciones</th>
+						{/if}
+					</tr>
+				</thead>
+				<tbody>
+					{#each $pagos as pago, i (pago.idPago)}
+						<tr class="bg-[var(--sections)] hover:bg-[var(--sections-hover)]">
+							{#each columns as col}								<td class="max-w-0 truncate border-b border-[var(--border)] p-3 text-[var(--letter)]">									{#if col.key === 'fechaPago'}
+										{pagoUtils.formatearFecha(pago.fechaPago)}
+									{:else if col.key === 'monto'}
+										{#if pagoService.identificarPagoConCuotas(pago, cuotasPendientesGlobales)}
+											{@html pagoService.formatearPagoConCuotas(pago)}
+										{:else}
+											{pagoUtils.formatearMonto(pago.monto)}
+										{/if}
+									{:else if col.key === 'metodoPago'}
+										<MetodoPagoChip metodo={pago.metodoPago || 'No especificado'} />
+									{:else if col.key === 'estado'}
+										<PagoEstadoChip estado={pago.estado || 'Pendiente'} />									{:else if col.key === 'esRenovacion'}
+										<span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {pago.esRenovacion ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}">
+											{pago.esRenovacion ? 'Renovación' : 'Inscripción'}
+										</span>
+									{:else if col.key === 'referencia'}
+										{pago.referencia || '-'}
+									{/if}
+								</td>
+							{/each}
+							{#if tableActions.length > 0}
+								<td class="border-b border-[var(--border)] p-3 text-right">
+									<div class="flex items-center justify-end gap-2">
+										{#each tableActions.filter(action => !action.hidden?.(pago)) as action}
+											<Button
+												variant={action.variant || 'outline'}
+												size="sm"
+												disabled={action.disabled?.(pago) || false}
+												on:click={() => action.onClick(pago)}
+											>
+												{#if action.icon}
+													<Icon name={action.icon} size={16} className="mr-1" />
+												{/if}
+												{action.label}
+											</Button>
+										{/each}
+									</div>
+								</td>
+							{/if}
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	{/if}
 </div>
 
@@ -289,32 +230,12 @@
 		<svelte:fragment slot="header">
 			<h3 class="text-lg font-semibold">Completar Pago</h3>
 		</svelte:fragment>
-
 		<div class="p-4">
-			<p class="mb-4">¿Confirmas que deseas completar este pago?</p>
-
-			<div class="space-y-2 rounded-md bg-gray-50 p-4">
-				<h4 class="font-medium">Resumen del Pago:</h4>
-				<p><strong>Cliente:</strong> {cliente.nombre} {cliente.apellido}</p>
-				<p><strong>Plan:</strong> {selectedPago.inscripcion?.plan?.nombre || 'No especificado'}</p>
-				<p>
-					<strong>Fecha de inicio:</strong>
-					{selectedPago.inscripcion?.fechaInicio
-						? formatDate(selectedPago.inscripcion.fechaInicio)
-						: '-'}
-				</p>
-				<p>
-					<strong>Fecha de fin:</strong>
-					{selectedPago.inscripcion?.fechaFin ? formatDate(selectedPago.inscripcion.fechaFin) : '-'}
-				</p>
-				<hr class="my-2" />				<p><strong>Monto ya pagado:</strong> ${selectedPago.monto.toFixed(2)}</p>
-				<p><strong>Monto restante:</strong> ${getMontoRestante(selectedPago, pagos).toFixed(2)}</p>
-				<p class="text-lg font-bold text-green-600">
-					<strong>Monto total final:</strong> ${(
-						selectedPago.monto + getMontoRestante(selectedPago, pagos)
-					).toFixed(2)}
-				</p>
-			</div>
+			<p class="mb-4">¿Confirmas que deseas completar este pago?</p>			<!-- Usar el componente PagoResumen modular -->
+			<PagoResumen 
+				pago={selectedPago} 
+				historialPagos={$pagos} 
+			/>
 
 			<div class="mt-4 rounded-md bg-blue-50 p-3">
 				<p class="text-sm text-blue-700">
@@ -333,8 +254,7 @@
 				}}
 			>
 				Cancelar
-			</Button>
-			<Button variant="success" on:click={confirmCompletePago} {isLoading}>
+			</Button>			<Button variant="success" on:click={confirmCompletePago} isLoading={$isLoading}>
 				<Icon name="check" size={16} className="mr-2" />
 				Confirmar y Completar
 			</Button>
@@ -348,8 +268,8 @@
 		isOpen={showDetailModal}
 		{cliente}
 		pago={selectedPago}
-		historialPagos={pagos}
-		canEdit={isUltimoPago(selectedPago)}
+		canEdit={pagoUtils.isUltimoPago(selectedPago, $pagos)}
+		{cuotasPendientesGlobales}
 		onClose={() => {
 			showDetailModal = false;
 			selectedPago = null;

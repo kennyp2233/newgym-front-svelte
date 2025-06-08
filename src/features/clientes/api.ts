@@ -64,6 +64,8 @@ export interface RegistroCompletoDTO {
         monto?: number;
         referencia?: string;
         observaciones?: string;
+        incluyeAnualidad?: boolean;
+        montoAnualidad?: number;
     };
 }
 
@@ -169,12 +171,13 @@ class ClienteService {
                     fechaFin: registroData.inscripcion.fechaFin
                         ? new Date(registroData.inscripcion.fechaFin)
                         : undefined
-                },
-                // ✅ CORREGIDO: Incluir los datos del pago
+                },                // ✅ CORREGIDO: Incluir los datos del pago con campos de anualidad
                 pago: registroData.pago ? {
                     monto: registroData.pago.monto,
                     referencia: registroData.pago.referencia,
-                    observaciones: registroData.pago.observaciones
+                    observaciones: registroData.pago.observaciones,
+                    incluyeAnualidad: registroData.pago.incluyeAnualidad,
+                    montoAnualidad: registroData.pago.montoAnualidad
                 } : undefined
             };
 
