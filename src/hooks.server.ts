@@ -1,26 +1,31 @@
 // src/hooks.server.ts
 import { SvelteKitAuth } from "@auth/sveltekit"
 import Auth0 from "@auth/sveltekit/providers/auth0"
-import { AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, AUTH0_DOMAIN, AUTH_SECRET } from "$env/static/private"
+import { 
+    AUTH0_CLIENT_ID, 
+    AUTH0_CLIENT_SECRET, 
+    AUTH0_DOMAIN, 
+    AUTH_SECRET 
+} from "$env/static/private"
 
 export const { handle, signIn, signOut } = SvelteKitAuth({
     providers: [
         Auth0({
-            clientId: AUTH0_CLIENT_ID,
-            clientSecret: AUTH0_CLIENT_SECRET,
-            issuer: `https://${AUTH0_DOMAIN}`,
+            clientId: AUTH0_CLIENT_ID || 'dummy-client-id',
+            clientSecret: AUTH0_CLIENT_SECRET || 'dummy-client-secret',
+            issuer: `https://${AUTH0_DOMAIN || 'dummy.auth0.com'}`,
             authorization: {
                 params: {
                     scope: "openid profile email",
-                    audience: `https://${AUTH0_DOMAIN}/api/v2/`
+                    audience: `https://${AUTH0_DOMAIN || 'dummy.auth0.com'}/api/v2/`
                 }
             }
         })
     ],
-    secret: AUTH_SECRET,
+    secret: AUTH_SECRET || 'fallback-secret-for-build-only-not-for-production',
     trustHost: true,
     callbacks: {
-        async jwt({ token, account, profile }) {
+        async jwt({ token, account, profile }: any) {
             // Persiste el token de Auth0
             if (account) {
                 token.accessToken = account.access_token
@@ -28,7 +33,7 @@ export const { handle, signIn, signOut } = SvelteKitAuth({
             }
             return token
         },
-        async session({ session, token }) {
+        async session({ session, token }: any) {
             // Envía propiedades al cliente
             session.accessToken = token.accessToken as string
             session.idToken = token.idToken as string
