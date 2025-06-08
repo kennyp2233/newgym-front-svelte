@@ -98,7 +98,6 @@
 			return false;
 		}
 	}
-
 	// Función de submit manual - ACTUALIZADA para manejar pagos con cuotas de mantenimiento separadamente
 	async function handleSubmitForm() {
 		const isValid = await validateForm();
@@ -109,7 +108,8 @@
 		}
 		isSubmitting = true;
 		try {
-			const montoPlanIngresado = parseFloat($form.monto.toString());
+			// Handle empty monto field properly to avoid NaN
+			const montoPlanIngresado = $form.monto ? parseFloat($form.monto.toString()) : 0;
 			let montoTotalFinal = montoPlanIngresado;
 
 			// Para pagos con cuotas de mantenimiento, sumar las cuotas al monto del plan

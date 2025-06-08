@@ -73,12 +73,26 @@ export const createRenovacionValidationSchema = (cuotasPendientes: any[] = [], p
  * Esquema de validación para editar pago existente
  */
 export const editarPagoValidationSchema = yup.object({
-    monto: yup.number()
-        .required('El monto es requerido')
-        .min(1, 'El monto debe ser mayor a $1.00')
-        .test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
-            if (!value) return true;
-            const decimal = value.toString().split('.')[1];
+    monto: yup.mixed()
+        .test('is-required-number', 'El monto es requerido', (value: any) => {
+            // Handle empty strings and null/undefined
+            if (value === '' || value === null || value === undefined) {
+                return false;
+            }
+            // Convert to number and check if it's valid
+            const numValue = parseFloat(value);
+            return !isNaN(numValue);
+        })
+        .test('min-value', 'El monto debe ser mayor a $1.00', (value: any) => {
+            if (value === '' || value === null || value === undefined) return true;
+            const numValue = parseFloat(value);
+            return !isNaN(numValue) && numValue >= 1;
+        })
+        .test('decimal-places', 'Solo se permiten hasta 2 decimales', (value: any) => {
+            if (value === '' || value === null || value === undefined) return true;
+            const numValue = parseFloat(value);
+            if (isNaN(numValue)) return true;
+            const decimal = numValue.toString().split('.')[1];
             return !decimal || decimal.length <= 2;
         }),
     // metodoPago field removed as per new requirements
@@ -124,13 +138,31 @@ export const createEditarPagoValidationSchema = (montoMaximo: number, allowZero:
     const mensajeMinimo = allowZero ? 'El monto debe ser mayor o igual a $0.00' : 'El monto debe ser mayor a $1.00';
     
     return yup.object({
-        monto: yup.number()
-            .required('El monto es requerido')
-            .min(montoMinimo, mensajeMinimo)
-            .max(montoMaximo, `El monto no puede exceder $${montoMaximo.toFixed(2)}`)
-            .test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
-                if (value === null || value === undefined) return true;
-                const decimal = value.toString().split('.')[1];
+        monto: yup.mixed()
+            .test('is-required-number', 'El monto es requerido', (value: any) => {
+                // Handle empty strings and null/undefined
+                if (value === '' || value === null || value === undefined) {
+                    return false;
+                }
+                // Convert to number and check if it's valid
+                const numValue = parseFloat(value);
+                return !isNaN(numValue);
+            })
+            .test('min-value', mensajeMinimo, (value: any) => {
+                if (value === '' || value === null || value === undefined) return true;
+                const numValue = parseFloat(value);
+                return !isNaN(numValue) && numValue >= montoMinimo;
+            })
+            .test('max-value', `El monto no puede exceder $${montoMaximo.toFixed(2)}`, (value: any) => {
+                if (value === '' || value === null || value === undefined) return true;
+                const numValue = parseFloat(value);
+                return !isNaN(numValue) && numValue <= montoMaximo;
+            })
+            .test('decimal-places', 'Solo se permiten hasta 2 decimales', (value: any) => {
+                if (value === '' || value === null || value === undefined) return true;
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return true;
+                const decimal = numValue.toString().split('.')[1];
                 return !decimal || decimal.length <= 2;
             }),
         // metodoPago field removed as per new requirements
