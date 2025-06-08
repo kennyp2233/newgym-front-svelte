@@ -10,12 +10,13 @@
 	
 	// Importar componentes modulares
 	import { createPagoStore, pagoUtils } from '../../../../pagos/composables/pagoComposables';
-	import PagoResumen from '../../../../pagos/components/PagoResumen.svelte';
+	import PagoEstadoChip from '../../../../pagos/components/PagoEstadoChip.svelte';
+	
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let pagosPendientes: PagoDTO[] = [];
-	export let historialPagos: PagoDTO[] = []; // Nueva prop para el historial completo
-	export let preselectedPago: PagoDTO | null = null; // Nuevo: pago preseleccionado desde tabla
+	export let historialPagos: PagoDTO[] = [];
+	export let preselectedPago: PagoDTO | null = null;
 	export let onClose: () => void = () => {};
 	export let onSuccess: () => void = () => {};
 
@@ -25,19 +26,19 @@
 	let isSubmitting = false;
 	let selectedPagoId = '';
 
-	// ✅ INICIALIZAR selectedPagoId: prioridad a preselectedPago, luego primer pendiente
+	// Inicializar selectedPagoId
 	$: if (preselectedPago) {
 		selectedPagoId = preselectedPago.idPago!.toString();
 	} else if (pagosPendientes.length > 0 && !selectedPagoId) {
 		selectedPagoId = pagosPendientes[0].idPago!.toString();
 	}
-	// ✅ OBTENER EL PAGO SELECCIONADO: prioridad a preselectedPago, luego buscar en pendientes
+	
+	// Obtener el pago seleccionado
 	$: selectedPago = preselectedPago || pagosPendientes.find((p) => p.idPago!.toString() === selectedPagoId) || null;
 	
-	// Usar utilidades modulares para calculos
+	// Calcular montos
 	$: montoRestante = selectedPago ? pagoUtils.calcularMontoRestante(selectedPago, historialPagos) : 0;
-	$: montoTotalCompletarPago = selectedPago ? pagoUtils.calcularMontoTotalCompletarPago(selectedPago) : 0;
-	// Función de completar pago usando composable - ACTUALIZADA para manejar arrays de pagos pendientes
+	$: montoTotalCompletarPago = selectedPago ? pagoUtils.calcularMontoTotalCompletarPago(selectedPago) : 0;	// Función de completar pago
 	async function handleCompletarPago() {
 		if (!selectedPago) {
 			toasts.showToast('No hay pago seleccionado', 'error');
@@ -46,72 +47,57 @@
 
 		isSubmitting = true;
 		
-		// Si hay múltiples pagos pendientes de renovación, manejarlos como array
-		if (Array.isArray(pagosPendientes) && pagosPendientes.length > 1) {
-			// Para renovaciones, completar todos los pagos pendientes relacionados
-			const pagosRenovacion = pagosPendientes.filter(p => p.esRenovacion);
-			
-			if (pagosRenovacion.length > 0) {
-				// Completar el pago seleccionado que puede incluir otros pendientes
-				const exito = await pagoStore.completarPago(selectedPago.idPago!, undefined, pagosRenovacion);
-				if (exito) {
-					onSuccess();
+		try {
+			let exito;
+			// Manejar arrays de pagos pendientes de renovación
+			if (Array.isArray(pagosPendientes) && pagosPendientes.length > 1) {
+				const pagosRenovacion = pagosPendientes.filter(p => p.esRenovacion);
+				if (pagosRenovacion.length > 0) {
+					exito = await pagoStore.completarPago(selectedPago.idPago!, undefined, pagosRenovacion);
+				} else {
+					exito = await pagoStore.completarPago(selectedPago.idPago!);
 				}
 			} else {
-				const exito = await pagoStore.completarPago(selectedPago.idPago!);
-				if (exito) {
-					onSuccess();
-				}
+				exito = await pagoStore.completarPago(selectedPago.idPago!);
 			}
-		} else {
-			const exito = await pagoStore.completarPago(selectedPago.idPago!);
+			
 			if (exito) {
 				onSuccess();
 			}
+		} finally {
+			isSubmitting = false;
 		}
-		
-		isSubmitting = false;
 	}
 
-	// ✅ GENERAR OPCIONES PARA EL SELECT
+	// Generar opciones para el select
 	$: pagoOptions = pagosPendientes.map((pago) => ({
 		value: pago.idPago!.toString(),
 		label: `${pago.inscripcion?.plan?.nombre || 'Plan no especificado'} - ${pagoUtils.formatearMonto(pago.monto)} (${pagoUtils.formatearFecha(pago.fechaPago)})`
 	}));
 </script>
 
-<BaseModal {isOpen} {onClose} size="md" closeOnClickOutside>	<svelte:fragment slot="header">
-		{#if preselectedPago}
+<BaseModal {isOpen} {onClose} size="md" closeOnClickOutside>
+	<svelte:fragment slot="header">
+		<div class="flex items-center gap-2">
+			<Icon name="check" size={20} className="text-green-600" />
 			<h3 class="text-lg font-semibold">Completar Pago</h3>
-		{:else}
-			<h3 class="text-lg font-semibold">Completar Pago Pendiente</h3>
-		{/if}
+		</div>
 	</svelte:fragment>
+	
 	<div class="space-y-4">
 		{#if !preselectedPago && pagosPendientes.length === 0}
-			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-				<p class="text-sm text-yellow-700">
-					<Icon name="warning" size={16} className="mr-1 inline" />
-					<strong>No hay pagos pendientes</strong> para este cliente.
-				</p>
+			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-center">
+				<Icon name="warning" size={24} className="mx-auto mb-2 text-yellow-600" />
+				<p class="text-sm font-medium text-yellow-800">No hay pagos pendientes</p>
+				<p class="text-xs text-yellow-700 mt-1">Este cliente no tiene pagos pendientes de completar.</p>
 			</div>
 		{:else}
-			{#if preselectedPago}
-				<p class="text-sm text-gray-600">
-					¿Confirmas que deseas completar este pago de <strong
-						>{cliente.nombre} {cliente.apellido}</strong>?
-				</p>
-			{:else}
-				<p class="text-sm text-gray-600">
-					Selecciona el pago pendiente que deseas completar para <strong
-						>{cliente.nombre} {cliente.apellido}</strong>:
-				</p>
-			{/if}
-
-			<!-- ✅ SELECTOR DE PAGO SI HAY MÚLTIPLES PAGOS PENDIENTES Y NO HAY PRESELECCIÓN -->
+			<!-- Selector de pago si hay múltiples opciones -->
 			{#if !preselectedPago && pagosPendientes.length > 1}
 				<div class="space-y-2">
-					<label for="pago-selector" class="text-sm font-medium text-gray-700">Pago a completar:</label>
+					<label for="pago-selector" class="text-sm font-medium text-gray-700">
+						Selecciona el pago a completar:
+					</label>
 					<Select
 						id="pago-selector"
 						options={pagoOptions}
@@ -119,29 +105,71 @@
 						placeholder="Seleccionar pago"
 					/>
 				</div>
-			{/if}			{#if selectedPago}
-				<!-- Usar componente modular para mostrar detalles del pago -->
-				<PagoResumen 
-					pago={selectedPago} 
-					{historialPagos}
-					showMontosDetallados={true}
-				/>
+			{/if}
 
+			{#if selectedPago}
+				<!-- Información resumida del pago -->
+				<div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+					<div class="flex items-start justify-between mb-3">
+						<div>
+							<h4 class="font-medium text-gray-900">
+								{selectedPago.inscripcion?.plan?.nombre || 'Plan no especificado'}
+							</h4>
+							<p class="text-sm text-gray-600">
+								Cliente: {cliente.nombre} {cliente.apellido}
+							</p>
+						</div>
+						<PagoEstadoChip estado={selectedPago.estado || 'Pendiente'} />
+					</div>
+
+					<div class="grid grid-cols-2 gap-4 text-sm">
+						<div>
+							<span class="text-gray-600">Monto pagado:</span>
+							<div class="font-bold text-lg">{pagoUtils.formatearMonto(selectedPago.monto)}</div>
+						</div>
+						<div>
+							<span class="text-gray-600">Monto restante:</span>
+							<div class="font-bold text-lg text-red-600">{pagoUtils.formatearMonto(montoRestante)}</div>
+						</div>
+					</div>
+
+					{#if montoRestante > 0}
+						<div class="mt-3 pt-3 border-t border-gray-200">
+							<div class="flex justify-between items-center">
+								<span class="text-gray-600">Total a completar:</span>
+								<span class="text-xl font-bold text-green-600">
+									{pagoUtils.formatearMonto(montoTotalCompletarPago)}
+								</span>
+							</div>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Nota informativa -->
 				<div class="rounded-lg border border-blue-200 bg-blue-50 p-3">
-					<p class="text-sm text-blue-700">
-						<Icon name="info" size={16} className="mr-1 inline" />
-						<strong>Nota:</strong> Se enviará un mensaje automático de WhatsApp al cliente confirmando
-						el pago completado.
-					</p>
+					<div class="flex items-start gap-2">
+						<Icon name="info" size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
+						<div class="text-sm text-blue-700">
+							<p class="font-medium">Se enviará confirmación por WhatsApp</p>
+							<p class="text-xs mt-1">El cliente recibirá un mensaje automático confirmando el pago completado.</p>
+						</div>
+					</div>
 				</div>
 			{/if}
 		{/if}
 	</div>
+
 	<svelte:fragment slot="footer">
-		<Button variant="outline" on:click={onClose}>Cancelar</Button>		{#if selectedPago}
+		<Button variant="outline" on:click={onClose}>Cancelar</Button>
+		{#if selectedPago && montoRestante > 0}
 			<Button variant="success" on:click={handleCompletarPago} isLoading={isSubmitting}>
 				<Icon name="check" size={16} className="mr-2" />
 				Completar Pago ({pagoUtils.formatearMonto(montoTotalCompletarPago)})
+			</Button>
+		{:else if selectedPago}
+			<Button variant="outline" disabled>
+				<Icon name="check" size={16} className="mr-2" />
+				Pago ya completado
 			</Button>
 		{:else}
 			<Button variant="success" disabled>

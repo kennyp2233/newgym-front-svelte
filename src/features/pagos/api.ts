@@ -13,7 +13,7 @@ export interface PagoDTO {
     referencia?: string;
     observaciones?: string;
     esRenovacion?: boolean;
-      // Campos para cuotas de mantenimiento
+    // Campos para cuotas de mantenimiento
     incluyeAnualidad?: boolean;
     montoAnualidad?: number;
     idCuotaMantenimiento?: number;
@@ -57,7 +57,7 @@ export interface RenovacionPlanDTO {
     fechaInicio?: string;
     referencia?: string;
     observaciones?: string;
-    
+
     // Campos para cuotas de mantenimiento
     incluyeAnualidad?: boolean;
     pagaCuotasPendientes?: boolean;
@@ -83,7 +83,7 @@ export interface RenovacionResponse {
             nombre: string;
             duracionMeses: number;
             precio: number;
-        };        pago: {
+        }; pago: {
             idPago: number;
             monto: number;
             fechaPago: string;
@@ -93,13 +93,14 @@ export interface RenovacionResponse {
     };
 }
 
-class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según documentación
+class PagoService {
+    // Renovar plan de un cliente - ACTUALIZADO según documentación
     async renovarPlan(renovacionData: RenovacionPlanDTO): Promise<RenovacionResponse> {
         try {
             // Verificar cuotas pendientes antes de renovar
             const { cuotaMantenimientoService } = await import('../cuotas-mantenimiento/api');
             const cuotasPendientes = await cuotaMantenimientoService.getCuotasPendientes(renovacionData.idCliente);
-            
+
             // Si hay cuotas pendientes, agregarlas al payload
             if (cuotasPendientes.length > 0 && !renovacionData.pagaCuotasPendientes) {
                 const totalCuotasPendientes = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
@@ -129,44 +130,11 @@ class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según docume
         }
     }
 
-    // Helper para convertir strings numéricos a number en PagoDTO y relaciones anidadas
-    private parsePagoDTO(pago: any): PagoDTO {
-        // Convertir campos principales
-        if (typeof pago.idPago === 'string' && !isNaN(Number(pago.idPago))) pago.idPago = Number(pago.idPago);
-        if (typeof pago.idCliente === 'string' && !isNaN(Number(pago.idCliente))) pago.idCliente = Number(pago.idCliente);
-        if (typeof pago.idInscripcion === 'string' && !isNaN(Number(pago.idInscripcion))) pago.idInscripcion = Number(pago.idInscripcion);
-        if (typeof pago.monto === 'string' && !isNaN(Number(pago.monto))) pago.monto = Number(pago.monto);
-
-        // Cliente anidado
-        if (pago.cliente) {
-            if (typeof pago.cliente.idCliente === 'string' && !isNaN(Number(pago.cliente.idCliente))) pago.cliente.idCliente = Number(pago.cliente.idCliente);
-        }
-
-        // Inscripción anidada
-        if (pago.inscripcion) {
-            if (typeof pago.inscripcion.idInscripcion === 'string' && !isNaN(Number(pago.inscripcion.idInscripcion))) pago.inscripcion.idInscripcion = Number(pago.inscripcion.idInscripcion);
-            if (typeof pago.inscripcion.idCliente === 'string' && !isNaN(Number(pago.inscripcion.idCliente))) pago.inscripcion.idCliente = Number(pago.inscripcion.idCliente);
-            if (typeof pago.inscripcion.idPlan === 'string' && !isNaN(Number(pago.inscripcion.idPlan))) pago.inscripcion.idPlan = Number(pago.inscripcion.idPlan);
-
-            // Plan anidado
-            if (pago.inscripcion.plan) {
-                if (typeof pago.inscripcion.plan.idPlan === 'string' && !isNaN(Number(pago.inscripcion.plan.idPlan))) pago.inscripcion.plan.idPlan = Number(pago.inscripcion.plan.idPlan);
-                if (typeof pago.inscripcion.plan.duracionMeses === 'string' && !isNaN(Number(pago.inscripcion.plan.duracionMeses))) pago.inscripcion.plan.duracionMeses = Number(pago.inscripcion.plan.duracionMeses);
-                if (typeof pago.inscripcion.plan.precio === 'string' && !isNaN(Number(pago.inscripcion.plan.precio))) pago.inscripcion.plan.precio = Number(pago.inscripcion.plan.precio);
-            }
-        }
-
-        return pago;
-    }
-
     // Obtener todos los pagos
     async getPagos(): Promise<PagoDTO[]> {
         try {
             const response = await api.get('/pagos');
-            // pasar todos los strings q sean numeros a number
-            return Array.isArray(response.data)
-                ? response.data.map(this.parsePagoDTO)
-                : [];
+            return Array.isArray(response.data) ? response.data : [];
         } catch (error) {
             console.error('Error al obtener pagos:', error);
             return [];
@@ -177,9 +145,7 @@ class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según docume
     async getPagosByCliente(idCliente: number): Promise<PagoDTO[]> {
         try {
             const response = await api.get(`/pagos/cliente/${idCliente}`);
-            return Array.isArray(response.data)
-                ? response.data.map(this.parsePagoDTO)
-                : [];
+            return Array.isArray(response.data) ? response.data : [];
         } catch (error) {
             console.error(`Error al obtener pagos del cliente ${idCliente}:`, error);
             return [];
@@ -190,7 +156,7 @@ class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según docume
     async getPagoById(id: number): Promise<PagoDTO | null> {
         try {
             const response = await api.get(`/pagos/${id}`);
-            return response.data ? this.parsePagoDTO(response.data) : null;
+            return response.data || null;
         } catch (error) {
             console.error(`Error al obtener pago con ID ${id}:`, error);
             return null;
@@ -295,12 +261,12 @@ class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según docume
         if (!pago.inscripcion?.plan) return 0;
 
         let precioTotal = pago.inscripcion.plan.precio;
-        
+
         // Agregar cuota de mantenimiento si aplica según documentación
         if (pago.incluyeAnualidad && pago.montoAnualidad) {
             precioTotal += pago.montoAnualidad;
         }
-        
+
         return Math.max(0, precioTotal - pago.monto);
     }
 
@@ -361,7 +327,7 @@ class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según docume
             // Importar servicios necesarios
             const { cuotaMantenimientoService } = await import('../cuotas-mantenimiento/api');
             const { planService } = await import('../planes/api');
-            
+
             // Obtener precio del plan
             const plan = await planService.getPlanById(idPlan);
             if (!plan) throw new Error('Plan no encontrado');
@@ -396,7 +362,7 @@ class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según docume
         if (!pago.inscripcion?.plan) return 'Plan no especificado';
 
         const montoPlan = pago.inscripcion.plan.precio;
-        
+
         // Solo mostrar formato con cuotas si efectivamente tiene cuotasMantenimiento con elementos
         if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
             const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);

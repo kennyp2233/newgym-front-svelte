@@ -38,39 +38,25 @@
         const fecha = new Date(fechaInicio);
         fecha.setMonth(fecha.getMonth() + duracionMeses);
         return fecha.toISOString().split('T')[0];
-    }    // Helper text dinámico para monto con cuotas de mantenimiento
-    $: montoHelperText = planSeleccionado
-        ? (() => {
-            const cuotasPendientesTotal = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
-            if (cuotasPendientesTotal > 0) {
-                return `Plan: $${planSeleccionado.precio.toFixed(2)} + Cuotas pendientes: $${cuotasPendientesTotal.toFixed(2)} = Total: $${precioTotal.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`;
-            } else {
-                return `Plan: $${planSeleccionado.precio.toFixed(2)}. Si no especificas monto, se tomará el precio completo.`;
-            }
-        })()        
-        : helperTextMonto || 'Seleccione un plan para ver el precio total';
+    }    // Helper text dinámico para monto con cuotas de mantenimiento - MEJORADO
+    $: montoHelperText = (() => {
+        if (helperTextMonto) return helperTextMonto;
+        
+        if (!planSeleccionado) {
+            return 'Seleccione un plan para ver el precio total';
+        }
+        
+        const cuotasPendientesTotal = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+        
+        if (cuotasPendientesTotal > 0) {
+            return `Plan: $${planSeleccionado.precio.toFixed(2)} + Cuotas pendientes: $${cuotasPendientesTotal.toFixed(2)} = Total requerido: $${precioTotal.toFixed(2)}`;
+        } else {
+            return `Precio del plan: $${planSeleccionado.precio.toFixed(2)}. Si no especifica monto, se tomará el precio completo.`;
+        }
+    })();
 </script>
 
-<!-- Información de cuotas pendientes -->
-{#if cuotasPendientes.length > 0}
-    <div class="rounded-md border border-orange-200 bg-orange-50 p-4">
-        <h4 class="mb-2 font-bold text-orange-800">⚠️ Cuotas de Mantenimiento Pendientes</h4>
-        <div class="space-y-1 text-sm text-orange-700">
-            {#each cuotasPendientes as cuota}
-                <p>• {cuota.descripcion}: ${cuota.monto.toFixed(2)} (Vence: {new Date(cuota.fechaVencimiento).toLocaleDateString()})</p>
-            {/each}
-            <div class="mt-2 border-t border-orange-300 pt-2">
-                <p class="font-semibold">
-                    Total pendiente: ${cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0).toFixed(2)}
-                </p>
-                <p class="text-xs">
-                    Estas cuotas se incluirán automáticamente en el pago.
-                </p>
-            </div>
-        </div>
-    </div>
-{/if}
-
+<!-- Selección de plan -->
 {#if showPlanField}
     <FormRow>
         <FormField
@@ -89,17 +75,18 @@
 <FormRow>
     <FormField
         name="monto"
-        label="Monto a pagar (Opcional)"
+        label="Monto a pagar {cuotasPendientes.length > 0 ? '(Requerido)' : '(Opcional)'}"
         type="number"
         placeholder={precioTotal ? precioTotal.toFixed(2) : "0.00"}
         helperText={montoHelperText}
         unit="$"
-        min={1}
-        max={maxMonto || precioTotal}
+        min={cuotasPendientes.length > 0 ? precioTotal : 0.01}
+        max={maxMonto}
         step="0.01"
         bind:value={form.monto}
         {errors}
         {touched}
+        required={cuotasPendientes.length > 0}
     />
     {#if showDateField}
         <FormField
@@ -144,42 +131,5 @@
         <p class={`text-sm ${caracteresRestantes < 10 ? 'text-red-500' : 'text-gray-500'}`}>
             {caracteresRestantes} caracteres restantes
         </p>
-    </div>
-{/if}
-
-<!-- Resumen del pago -->
-{#if planSeleccionado && form.fechaInicio}
-    <div class="mt-6 rounded-md bg-gray-50 p-4">
-        <h3 class="mb-2 font-semibold">
-            Resumen del {isRenovacion ? 'renovación' : 'pago'}:
-        </h3>
-        <div class="space-y-1 text-sm text-gray-600">
-            <p>Plan: {planSeleccionado.nombre}</p>
-            <p>
-                Duración: {planSeleccionado.duracionMeses}
-                {planSeleccionado.duracionMeses === 1 ? 'mes' : 'meses'}
-            </p>            <div class="mt-2 border-t pt-2">
-                <p>Precio del plan: ${planSeleccionado.precio.toFixed(2)}</p>
-                {#if cuotasPendientes.length > 0}
-                    <p>Cuotas de mantenimiento pendientes: ${cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0).toFixed(2)}</p>
-                {/if}
-                <p class="font-bold">Total: ${precioTotal.toFixed(2)}</p>
-                <p>Monto a pagar: ${form.monto || precioTotal.toFixed(2)}</p>
-                {#if !form.monto}
-                    <p class="text-xs text-blue-600">
-                        (Se tomará el precio completo automáticamente)
-                    </p>
-                {:else if parseFloat(form.monto.toString()) < precioTotal}
-                    <p class="font-medium text-yellow-600">
-                        Restante: ${(precioTotal - parseFloat(form.monto.toString())).toFixed(2)}
-                        (Pago será marcado como Pendiente)
-                    </p>
-                {/if}
-            </div>
-            <p>Fecha de inicio: {form.fechaInicio}</p>
-            <p>
-                Fecha de fin: {calcularFechaFin(form.fechaInicio, planSeleccionado.duracionMeses)}
-            </p>
-        </div>
     </div>
 {/if}

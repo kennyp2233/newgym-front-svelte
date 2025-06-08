@@ -50,81 +50,26 @@ class MedidaService {
             console.error('Error al obtener medidas:', error);
             return [];
         }
-    }
-
-    async getMedidaById(id: number): Promise<Medida | null> {
+    }    async getMedidaById(id: number): Promise<Medida | null> {
         try {
             const response = await api.get(`/medidas/${id}`);
-            const data = response.data;
-            if (data) {
-                // Parsear campos numéricos
-                data.idMedida = Number(data.idMedida);
-                data.idCliente = Number(data.idCliente);
-                data.peso = data.peso !== undefined ? Number(data.peso) : undefined;
-                data.altura = data.altura !== undefined ? Number(data.altura) : undefined;
-                data.brazos = data.brazos !== undefined ? Number(data.brazos) : undefined;
-                data.pantorrillas = data.pantorrillas !== undefined ? Number(data.pantorrillas) : undefined;
-                data.cuello = data.cuello !== undefined ? Number(data.cuello) : undefined;
-                data.muslos = data.muslos !== undefined ? Number(data.muslos) : undefined;
-                data.pecho = data.pecho !== undefined ? Number(data.pecho) : undefined;
-                data.cintura = data.cintura !== undefined ? Number(data.cintura) : undefined;
-                data.gluteo = data.gluteo !== undefined ? Number(data.gluteo) : undefined;
-                data.imc = data.imc !== undefined ? Number(data.imc) : undefined;
-            }
-            return data;
+            return response.data;
         } catch (error) {
             console.error(`Error al obtener medida con ID ${id}:`, error);
             return null;
         }
-    }
-
-    async getMedidasByCliente(idCliente: number): Promise<Medida[]> {
+    }    async getMedidasByCliente(idCliente: number): Promise<Medida[]> {
         try {
             const response = await api.get(`/medidas/cliente/${idCliente}`);
-            const medidas = response.data;
-            if (Array.isArray(medidas)) {
-                return medidas.map((data) => ({
-                    ...data,
-                    idMedida: Number(data.idMedida),
-                    idCliente: Number(data.idCliente),
-                    peso: data.peso !== undefined ? Number(data.peso) : undefined,
-                    altura: data.altura !== undefined ? Number(data.altura) : undefined,
-                    brazos: data.brazos !== undefined ? Number(data.brazos) : undefined,
-                    pantorrillas: data.pantorrillas !== undefined ? Number(data.pantorrillas) : undefined,
-                    cuello: data.cuello !== undefined ? Number(data.cuello) : undefined,
-                    muslos: data.muslos !== undefined ? Number(data.muslos) : undefined,
-                    pecho: data.pecho !== undefined ? Number(data.pecho) : undefined,
-                    cintura: data.cintura !== undefined ? Number(data.cintura) : undefined,
-                    gluteo: data.gluteo !== undefined ? Number(data.gluteo) : undefined,
-                    imc: data.imc !== undefined ? Number(data.imc) : undefined,
-                }));
-            }
-            return [];
+            return Array.isArray(response.data) ? response.data : [];
         } catch (error) {
             console.error(`Error al obtener medidas del cliente ${idCliente}:`, error);
             return [];
         }
-    }
-
-    async getUltimaMedida(idCliente: number): Promise<Medida | null> {
+    }    async getUltimaMedida(idCliente: number): Promise<Medida | null> {
         try {
             const response = await api.get(`/medidas/cliente/${idCliente}/ultima`);
-            const data = response.data;
-            if (data) {
-                data.idMedida = Number(data.idMedida);
-                data.idCliente = Number(data.idCliente);
-                data.peso = data.peso !== undefined ? Number(data.peso) : undefined;
-                data.altura = data.altura !== undefined ? Number(data.altura) : undefined;
-                data.brazos = data.brazos !== undefined ? Number(data.brazos) : undefined;
-                data.pantorrillas = data.pantorrillas !== undefined ? Number(data.pantorrillas) : undefined;
-                data.cuello = data.cuello !== undefined ? Number(data.cuello) : undefined;
-                data.muslos = data.muslos !== undefined ? Number(data.muslos) : undefined;
-                data.pecho = data.pecho !== undefined ? Number(data.pecho) : undefined;
-                data.cintura = data.cintura !== undefined ? Number(data.cintura) : undefined;
-                data.gluteo = data.gluteo !== undefined ? Number(data.gluteo) : undefined;
-                data.imc = data.imc !== undefined ? Number(data.imc) : undefined;
-            }
-            return data;
+            return response.data;
         } catch (error) {
             console.error(`Error al obtener última medida del cliente ${idCliente}:`, error);
             return null;

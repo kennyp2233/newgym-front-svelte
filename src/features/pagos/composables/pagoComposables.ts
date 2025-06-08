@@ -292,25 +292,25 @@ export const pagoUtils = {
 
         // Calcular el monto restante
         return Math.max(0, montoTotalEsperado - pago.monto);
-    },
-
-    /**
+    },    /**
      * Calcula el monto máximo permitido para un pago considerando todas sus asociaciones
+     * Para pagos con cuotas de mantenimiento, solo permite editar el monto del plan
      */
     calcularMontoMaximoPermitido(pago: PagoDTO): number {
         if (!pago.inscripcion?.plan) return 0;
 
-        let montoMaximo = pago.inscripcion.plan.precio;
-
-        // Agregar anualidad si está incluida
-        if (pago.incluyeAnualidad && pago.montoAnualidad) {
-            montoMaximo += pago.montoAnualidad;
+        // Para pagos con cuotas de mantenimiento, el máximo es más flexible
+        // permitiendo solo editar la parte del plan
+        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
+            // Permitir editar hasta 3 veces el precio del plan para mayor flexibilidad
+            return pago.inscripcion.plan.precio * 3;
         }
 
-        // Agregar cuotas de mantenimiento si están asociadas
-        if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
-            const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
-            montoMaximo += montoCuotas;
+        let montoMaximo = pago.inscripcion.plan.precio;
+
+        // Agregar anualidad si está incluida (solo para pagos sin cuotas de mantenimiento)
+        if (pago.incluyeAnualidad && pago.montoAnualidad) {
+            montoMaximo += pago.montoAnualidad;
         }
 
         return montoMaximo;

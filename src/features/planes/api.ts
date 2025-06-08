@@ -12,33 +12,19 @@ export interface Plan {
 }
 
 
-class PlanService {
-    // Obtener todos los planes
+class PlanService {    // Obtener todos los planes
     async getPlanes(): Promise<Plan[]> {
         try {
             const response = await api.get('/planes');
-            // asegurar todos lo valores que puedan ser numeros pero string sean convertidos a numeros
-            response.data.forEach((plan: Plan) => {
-                plan.idPlan = Number(plan.idPlan);
-                plan.duracionMeses = Number(plan.duracionMeses);
-                plan.precio = Number(plan.precio);
-            });
             return response.data;
         } catch (error) {
             console.error('Error al obtener planes:', error);
             return [];
         }
-    }
-
-    // Obtener un plan por ID
+    }    // Obtener un plan por ID
     async getPlanById(id: number): Promise<Plan | null> {
         try {
             const response = await api.get(`/planes/${id}`);
-            // asegurar todos lo valores que puedan ser numeros pero string sean convertidos a numeros
-            response.data.idPlan = Number(response.data.idPlan);
-            response.data.duracionMeses = Number(response.data.duracionMeses);
-            response.data.precio = Number(response.data.precio);
-
             return response.data;
         } catch (error) {
             console.error(`Error al obtener plan con ID ${id}:`, error);

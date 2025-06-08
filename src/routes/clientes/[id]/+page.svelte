@@ -12,7 +12,7 @@
 	import { pagoService } from '../../../features/pagos/api';
 	import { toasts } from '$lib/stores/toastStore';
 	import EditarClienteModal from '../../../features/clientes/components/individual/info-personal/EditarClienteModal.svelte';
-	import NuevoPagoModal from '../../../features/clientes/components/individual/pagos/NuevoPagoModal.svelte';
+	import RenovarMembresiaModal from '../../../features/clientes/components/individual/pagos/RenovarMembresiaModal.svelte';
 	import CompletarPagoModal from '../../../features/clientes/components/individual/pagos/CompletarPagoModal.svelte';
 	import NuevaMedidaModal from '../../../features/clientes/components/individual/medidas/NuevaMedidaModal.svelte';
 	import MedidasHistoricas from '../../../features/clientes/components/individual/medidas/MedidasHistoricas.svelte';
@@ -122,7 +122,7 @@
 			if (historialPagos.length === 0) {
 				historialPagos = pagos;
 			}
-
+			console.log('Pagos cargados:', pagos);
 			// Solo incluir pagos de planes pendientes (que tienen inscripcion)
 			pagosPendientes = pagos.filter(
 				(p) => p.estado === 'Pendiente' && p.inscripcion // Solo pagos de planes
@@ -196,8 +196,7 @@
 	function handleEditCliente() {
 		showEditModal = true;
 	}
-
-	function handleNuevoPago() {
+	function handleRenovarMembresia() {
 		showPagoModal = true;
 	}
 
@@ -264,9 +263,6 @@
 					<Icon name="arrow-left" size={16} className="mr-2" />
 					Volver
 				</Button>
-				<h1 class="text-2xl font-bold text-[var(--letter)]">
-					{$isLoading ? 'Cargando...' : 'Ficha de cliente'}
-				</h1>
 			</div>
 		</div>
 
@@ -281,6 +277,27 @@
 			<Panel title="Información personal" variant="clean" titleIcon="people">
 				<svelte:fragment slot="header-actions">
 					<div class="flex items-center gap-2">
+						<!-- Botones de pago según el estado del cliente -->
+						{#if tieneDeudaPendiente}
+							<Button variant="success" size="sm" on:click={handleCompletarPago}>
+								<Icon name="check" size={16} className="mr-2" />
+								Completar Pago Pendiente
+							</Button>
+						{:else}							<Button
+								variant="primary"
+								size="sm"
+								disabled={tieneDeudaPendiente}
+								on:click={handleRenovarMembresia}
+							>
+								<Icon name="plus" size={16} className="mr-2" />
+								Renovar Membresía
+							</Button>
+						{/if}
+
+						<!-- Separador visual -->
+						<div class="h-6 w-px bg-gray-300"></div>
+
+						<!-- Botones de gestión del cliente -->
 						<Button variant="outline" size="sm" on:click={handleEditCliente}>
 							<Icon name="edit" size={16} className="mr-2" />
 							Editar información
@@ -436,23 +453,6 @@
 								<Icon name="plus" size={16} className="mr-2" />
 								Nueva Medida
 							</Button>
-						{:else if activeTab === 'pagos'}
-							{#if tieneDeudaPendiente}
-								<Button variant="success" size="sm" on:click={handleCompletarPago}>
-									<Icon name="check" size={16} className="mr-2" />
-									Completar Pago Pendiente
-								</Button>
-							{:else}
-								<Button
-									variant="primary"
-									size="sm"
-									disabled={tieneDeudaPendiente}
-									on:click={handleNuevoPago}
-								>
-									<Icon name="plus" size={16} className="mr-2" />
-									Renovar Plan
-								</Button>
-							{/if}
 						{/if}
 					</svelte:fragment>
 				</Panel>
@@ -469,14 +469,11 @@
 				onClose={() => (showEditModal = false)}
 				onSuccess={handleEditSuccess}
 			/>
-		{/if}
-
-		{#if showPagoModal && $cliente}
-			<NuevoPagoModal
+		{/if}		{#if showPagoModal && $cliente}
+			<RenovarMembresiaModal
 				isOpen={showPagoModal}
 				cliente={$cliente}
 				planActualId={getPlanActualId()}
-				isRenovacion={!tieneDeudaPendiente}
 				onClose={() => (showPagoModal = false)}
 				onSuccess={handlePagoSuccess}
 			/>
