@@ -12,7 +12,62 @@ Este proyecto ha sido configurado para un deployment de producción adecuado, re
 4. **Configuración de Seguridad**: Usuario no-root, health checks, y signal handling
 5. **Optimización de Tamaño**: Eliminación de dev dependencies en producción
 
-## 🐳 Docker Setup
+## 🚄 Railway Deployment (Recomendado)
+
+Railway es la plataforma más fácil para deployar tu aplicación SvelteKit. Ya tienes todo configurado:
+
+### Pre-requisitos
+1. Cuenta en [Railway.app](https://railway.app)
+2. Variables de entorno configuradas
+
+### Pasos para Deploy
+
+1. **Conecta tu repositorio:**
+   ```bash
+   # En tu repositorio, conecta con Railway
+   railway login
+   railway link
+   ```
+
+2. **Configura las variables de entorno en Railway:**
+   - `AUTH0_CLIENT_ID`: Tu Client ID de Auth0
+   - `AUTH0_CLIENT_SECRET`: Tu Client Secret de Auth0  
+   - `AUTH0_DOMAIN`: Tu dominio de Auth0 (sin https://)
+   - `AUTH_SECRET`: Un string aleatorio seguro para JWT
+   - `NODE_ENV`: production
+   - `PORT`: 3000
+
+3. **Deploy automático:**
+   ```bash
+   railway up
+   ```
+
+### ✅ Ventajas de Railway
+- ✅ **Auto-deploy** desde Git push
+- ✅ **HTTPS automático** con certificados SSL
+- ✅ **Variables de entorno seguras**
+- ✅ **Logs en tiempo real**
+- ✅ **Escalado automático**
+- ✅ **PostgreSQL incluido** (si necesitas base de datos)
+
+### Configuración Railway
+Tu `railway.json` ya está configurado:
+```json
+{
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "node build",
+    "healthcheckPath": "/",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
+```
+
+## 🐳 Docker Setup (Alternativo)
 
 ### Construcción Local
 
