@@ -6,7 +6,8 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import InformacionPersonalStepFixed from './InformacionPersonalStepFixed.svelte';
 	import MedidasStepFixed from './MedidasStepFixed.svelte';
-	import ResumenStepFixed from './ResumenStepFixed.svelte';	import {
+	import ResumenStepFixed from './ResumenStepFixed.svelte';
+	import {
 		Step1Schema,
 		Step2Schema,
 		Step3Schema,
@@ -23,11 +24,10 @@
 	export let onClose: () => void = () => {};
 	export let onSubmit: (data: RegistroCompletoDTO) => Promise<void>;
 	export let clienteToEdit: Partial<ClienteFormData> | null = null;
-
 	let currentStep = 0;
 	let planes: Plan[] = [];
 	let isSubmitting = false;
-	const steps = ['Información del cliente', 'Medidas del cliente', 'Detalles de la membresía'];
+	const steps = ['Información Personal', 'Medidas Corporales', 'Membresía y Pago'];
 
 	const resolvedInitialValues = clienteToEdit
 		? { ...defaultClienteFormValues, ...clienteToEdit }
@@ -169,9 +169,17 @@
 				'pecho',
 				'cintura',
 				'cuello'
-			];		} else {
+			];
+		} else {
 			// AGREGAMOS LOS NUEVOS CAMPOS DE PAGO AL STEP 3
-			return ['fechaInicio', 'monto', 'referencia', 'observaciones', 'incluyeAnualidad', 'montoAnualidad'];
+			return [
+				'fechaInicio',
+				'monto',
+				'referencia',
+				'observaciones',
+				'incluyeAnualidad',
+				'montoAnualidad'
+			];
 		}
 	}
 	async function submitFormLogic(formData: ClienteFormData) {
@@ -213,7 +221,8 @@
 				inscripcion: {
 					idPlan: parseInt(formData.idPlan as string, 10),
 					fechaInicio: formData.fechaInicio as string,
-					fechaFin: planService.calcularFechaFin(formData.fechaInicio as string, duracionMeses)				},				// AGREGAMOS EL OBJETO PAGO CON CAMPOS DE ANUALIDAD
+					fechaFin: planService.calcularFechaFin(formData.fechaInicio as string, duracionMeses)
+				}, // AGREGAMOS EL OBJETO PAGO CON CAMPOS DE ANUALIDAD
 				pago: {
 					monto: formData.monto ? Number(formData.monto) : undefined,
 					referencia: formData.referencia ? String(formData.referencia) : undefined,
@@ -256,10 +265,8 @@
 	});
 </script>
 
-<BaseModal {isOpen} {onClose} size="lg" closeOnClickOutside={false} asForm={false} novalidate>
-	<svelte:fragment slot="header">
-		<h3 class="text-lg font-semibold">{steps[currentStep]}</h3>
-		<StepProgress {currentStep} totalSteps={steps.length} />
+<BaseModal {isOpen} {onClose} size="lg" closeOnClickOutside={false} asForm={false} novalidate>	<svelte:fragment slot="header">
+		<StepProgress {currentStep} totalSteps={steps.length} stepLabels={steps} />
 	</svelte:fragment>
 
 	<!-- We need to wrap content in a form tag for HTML5 validation accessibility if not using asForm and for enter key submission -->
