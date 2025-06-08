@@ -2,6 +2,8 @@
 <script lang="ts">
 	import Navbar from '$lib/components/ui/Navbar.svelte';
 	import ToastContainer from '$lib/components/ui/Toast/ToastContainer.svelte';
+	import WhatsAppTestModal from '../../../features/whatsapp/WhatsAppTestModal.svelte';
+	import { whatsappModalStore } from '../../../features/whatsapp/whatsappModalStore';
 </script>
 
 <div class="flex min-h-screen flex-col bg-[var(--background)] font-[family-name:var(--font-main)]">
@@ -17,5 +19,8 @@
 	</footer>
 	-->
 </div>
+
+<!-- Global modals -->
+<WhatsAppTestModal isOpen={$whatsappModalStore.showTestModal} on:close={() => whatsappModalStore.closeTestModal()} />
 
 <ToastContainer />

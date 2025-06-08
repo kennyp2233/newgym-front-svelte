@@ -83,9 +83,8 @@
 
 {#if isOpen}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,#000_50%,transparent)] p-4"
+	<!-- svelte-ignore a11y_no_static_element_interactions -->	<div
+		class="fixed inset-0 z-[100] flex items-center justify-center bg-[color-mix(in_srgb,#000_50%,transparent)] p-4"
 		on:click={handleBackdropClick}
 	>
 		<div
