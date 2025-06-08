@@ -88,10 +88,10 @@
 			pagaCuotasPendientes: tieneCuotasPendientes,
 			cuotasPorPagar: cuotasPorPagar
 		});
-
 		if (exito) {
 			toasts.showToast('Membresía renovada exitosamente', 'success');
 			onSuccess();
+			onClose(); // Cerrar el modal después del éxito
 		}
 		isSubmitting = false;
 	} // Cargar datos iniciales

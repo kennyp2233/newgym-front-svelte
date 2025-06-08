@@ -58,11 +58,11 @@
 					exito = await pagoStore.completarPago(selectedPago.idPago!);
 				}
 			} else {
-				exito = await pagoStore.completarPago(selectedPago.idPago!);
-			}
+				exito = await pagoStore.completarPago(selectedPago.idPago!);			}
 			
 			if (exito) {
 				onSuccess();
+				onClose(); // Cerrar el modal después del éxito
 			}
 		} finally {
 			isSubmitting = false;
