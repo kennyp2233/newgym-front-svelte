@@ -1,11 +1,16 @@
 <!-- src/features/clientes/components/individual/medidas/MedidaDetailModal.svelte -->
-<script lang="ts">	import { createForm } from 'svelte-forms-lib';
+<script lang="ts">
+	import { createForm } from 'svelte-forms-lib';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
-	import { createMedidasListStore, medidaUtils, type Medida } from '../../../../medidas/composables/medidaComposables';
+	import {
+		createMedidasListStore,
+		medidaUtils,
+		type Medida
+	} from '../../../../medidas/composables/medidaComposables';
 	import type { Cliente } from '../../../api';
 	import { TipoOcupacion } from '../../../api';
 	import { toasts } from '$lib/stores/toastStore';
@@ -25,21 +30,62 @@
 	let imc = '';
 	let categoriaPeso = '';
 
-	const esNino = cliente.ocupacion === TipoOcupacion.NINO;
-
-	// Esquema de validación
+	const esNino = cliente.ocupacion === TipoOcupacion.NINO; // Esquema de validación
 	const validationSchema = yup.object({
 		peso: yup.number().required('El peso es requerido'),
 		altura: yup.number().required('La altura es requerida'),
 		...(esNino
 			? {}
 			: {
-					brazos: yup.number().required('La medida de brazos es requerida'),
-					pantorrillas: yup.number().required('La medida de pantorrillas es requerida'),
-					gluteo: yup.number().required('La medida de glúteo es requerida'),
-					muslos: yup.number().required('La medida de muslos es requerida'),
-					pecho: yup.number().required('La medida de pecho es requerida'),
-					cintura: yup.number().required('La medida de cintura es requerida')
+					brazos: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					pantorrillas: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					gluteo: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					muslos: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					pecho: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					cintura: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					cuello: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable()
 				})
 	});
 	// Configuración del formulario con valores iniciales de la medida (sin validationSchema para manejar validación manual)
@@ -117,17 +163,19 @@
 				...(esNino
 					? {}
 					: {
-							brazos: parseFloat($form.brazos),
-							pantorrillas: parseFloat($form.pantorrillas),
-							gluteo: parseFloat($form.gluteo),
-							muslos: parseFloat($form.muslos),
-							pecho: parseFloat($form.pecho),
-							cintura: parseFloat($form.cintura),
+							brazos: $form.brazos ? parseFloat($form.brazos) : undefined,
+							pantorrillas: $form.pantorrillas ? parseFloat($form.pantorrillas) : undefined,
+							gluteo: $form.gluteo ? parseFloat($form.gluteo) : undefined,
+							muslos: $form.muslos ? parseFloat($form.muslos) : undefined,
+							pecho: $form.pecho ? parseFloat($form.pecho) : undefined,
+							cintura: $form.cintura ? parseFloat($form.cintura) : undefined,
 							cuello: $form.cuello ? parseFloat($form.cuello) : undefined
 						})
-			};			await actualizarMedida(medida.idMedida, medidaData);
+			};
+			await actualizarMedida(medida.idMedida, medidaData);
 			isEditing = false;
-			onSuccess();		} catch (error) {
+			onSuccess();
+		} catch (error) {
 			// El error ya se maneja en el composable
 		} finally {
 			isSubmitting = false;
@@ -227,7 +275,7 @@
 					<FormRow>
 						<FormField
 							name="brazos"
-							label="Brazos"
+							label="Brazos (Opcional)"
 							type="number"
 							placeholder="Ej. 30"
 							unit="cm"
@@ -237,7 +285,7 @@
 						/>
 						<FormField
 							name="pantorrillas"
-							label="Pantorrillas"
+							label="Pantorrillas (Opcional)"
 							type="number"
 							placeholder="Ej. 35"
 							unit="cm"
@@ -250,7 +298,7 @@
 					<FormRow>
 						<FormField
 							name="gluteo"
-							label="Glúteo"
+							label="Glúteo (Opcional)"
 							type="number"
 							placeholder="Ej. 95"
 							unit="cm"
@@ -260,7 +308,7 @@
 						/>
 						<FormField
 							name="muslos"
-							label="Muslos"
+							label="Muslos (Opcional)"
 							type="number"
 							placeholder="Ej. 50"
 							unit="cm"
@@ -273,17 +321,16 @@
 					<FormRow>
 						<FormField
 							name="pecho"
-							label="Pecho"
+							label="Pecho (Opcional)"
 							type="number"
 							placeholder="Ej. 90"
 							unit="cm"
 							bind:value={$form.pecho}
 							errors={$errors}
 							touched={$touched}
-						/>
-						<FormField
+						/><FormField
 							name="cintura"
-							label="Cintura"
+							label="Cintura (Opcional)"
 							type="number"
 							placeholder="Ej. 80"
 							unit="cm"

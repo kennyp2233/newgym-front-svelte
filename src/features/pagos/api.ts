@@ -361,15 +361,20 @@ class PagoService {
     formatearPagoConCuotas(pago: PagoDTO): string {
         if (!pago.inscripcion?.plan) return 'Plan no especificado';
 
-        const montoPlan = pago.inscripcion.plan.precio;
+        const montoPlanCompleto = pago.inscripcion.plan.precio;
 
         // Solo mostrar formato con cuotas si efectivamente tiene cuotasMantenimiento con elementos
         if (pago.cuotasMantenimiento && pago.cuotasMantenimiento.length > 0) {
             const montoCuotas = pago.cuotasMantenimiento.reduce((sum, cuota) => sum + cuota.monto, 0);
-            return `$${montoPlan.toFixed(2)} + $${montoCuotas.toFixed(2)} (cuotas)`;
+            
+            // Calcular cuánto se depositó del plan (restando las cuotas del monto total)
+            const montoDepositadoDelPlan = pago.monto - montoCuotas;
+            
+            // Siempre mostrar el desglose: monto depositado del plan + cuotas fijas
+            return `$${montoDepositadoDelPlan.toFixed(2)} + $${montoCuotas.toFixed(2)} (cuotas)`;
         }
 
-        return `$${montoPlan.toFixed(2)}`;
+        return `$${montoPlanCompleto.toFixed(2)}`;
     }// Identificar si un pago tiene cuotas de mantenimiento asociadas - ACTUALIZADO según requisitos
     identificarPagoConCuotas(pago: PagoDTO): boolean {
         // Solo considerar que tiene cuotas si hay un array de cuotasMantenimiento con elementos

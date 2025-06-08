@@ -1,10 +1,14 @@
 <!-- src/features/clientes/components/individual/medidas/NuevaMedidaModal.svelte -->
-<script lang="ts">	import { createForm } from 'svelte-forms-lib';
+<script lang="ts">
+	import { createForm } from 'svelte-forms-lib';
 	import BaseModal from '$lib/components/modals/BaseModal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import FormField from '$lib/components/ui/forms/FormField.svelte';
 	import FormRow from '$lib/components/ui/forms/FormRow.svelte';
-	import { createMedidasListStore, medidaUtils } from '../../../../medidas/composables/medidaComposables';
+	import {
+		createMedidasListStore,
+		medidaUtils
+	} from '../../../../medidas/composables/medidaComposables';
 	import type { Cliente } from '../../../api';
 	import { TipoOcupacion } from '../../../api';
 	import { toasts } from '$lib/stores/toastStore';
@@ -22,22 +26,63 @@
 	let imc = '';
 	let categoriaPeso = '';
 
-	const esNino = cliente.ocupacion === TipoOcupacion.NINO;
-
-	// Esquema de validación adaptado según la ocupación
+	const esNino = cliente.ocupacion === TipoOcupacion.NINO; // Esquema de validación adaptado según la ocupación
 	const validationSchema = yup.object({
 		peso: yup.number().required('El peso es requerido'),
 		altura: yup.number().required('La altura es requerida'),
-		// Los siguientes campos solo son requeridos si no es un niño
+		// Los siguientes campos son opcionales para flexibilidad en el registro
 		...(esNino
 			? {}
 			: {
-					brazos: yup.number().required('La medida de brazos es requerida'),
-					pantorrillas: yup.number().required('La medida de pantorrillas es requerida'),
-					gluteo: yup.number().required('La medida de glúteo es requerida'),
-					muslos: yup.number().required('La medida de muslos es requerida'),
-					pecho: yup.number().required('La medida de pecho es requerida'),
-					cintura: yup.number().required('La medida de cintura es requerida')
+					brazos: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					pantorrillas: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					gluteo: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					muslos: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					pecho: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					cintura: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable(),
+					cuello: yup
+						.mixed()
+						.test('is-number-or-empty', 'Debe ser un número válido', (value) => {
+							if (value === '' || value === null || value === undefined) return true;
+							return !isNaN(Number(value)) && Number(value) >= 0;
+						})
+						.nullable()
 				})
 	});
 	// Configuración del formulario (sin validationSchema para manejar validación manual)
@@ -70,7 +115,7 @@
 			await validationSchema.validate($form, { abortEarly: false });
 			// Si la validación pasa, limpiar errores
 			const emptyErrors: Record<string, string> = {};
-			Object.keys($form).forEach(key => emptyErrors[key] = '');
+			Object.keys($form).forEach((key) => (emptyErrors[key] = ''));
 			errors.set(emptyErrors);
 			return true;
 		} catch (yupError: any) {
@@ -99,7 +144,7 @@
 	// Función de submit manual
 	async function handleSubmitForm() {
 		const isValid = await validateForm();
-		
+
 		if (!isValid) {
 			toasts.showToast('Por favor, corrige los errores en el formulario.', 'warning');
 			return;
@@ -113,21 +158,23 @@
 				peso: parseFloat($form.peso),
 				altura: parseFloat($form.altura),
 				imc: parseFloat(imc),
-				categoriaPeso,
-				// Si es niño, solo enviamos peso y altura
+				categoriaPeso, // Si es niño, solo enviamos peso y altura
 				...(esNino
 					? {}
 					: {
-							brazos: parseFloat($form.brazos),
-							pantorrillas: parseFloat($form.pantorrillas),
-							gluteo: parseFloat($form.gluteo),
-							muslos: parseFloat($form.muslos),
-							pecho: parseFloat($form.pecho),
-							cintura: parseFloat($form.cintura),
+							brazos: $form.brazos ? parseFloat($form.brazos) : undefined,
+							pantorrillas: $form.pantorrillas ? parseFloat($form.pantorrillas) : undefined,
+							gluteo: $form.gluteo ? parseFloat($form.gluteo) : undefined,
+							muslos: $form.muslos ? parseFloat($form.muslos) : undefined,
+							pecho: $form.pecho ? parseFloat($form.pecho) : undefined,
+							cintura: $form.cintura ? parseFloat($form.cintura) : undefined,
 							cuello: $form.cuello ? parseFloat($form.cuello) : undefined
 						})
-			};			await crearMedida(medidaData);
-			onSuccess();		} catch (error) {
+			};
+			await crearMedida(medidaData);
+			onSuccess();
+			onClose(); // Cerrar el modal después del éxito
+		} catch (error) {
 			// El error ya se maneja en el composable
 		} finally {
 			isSubmitting = false;
@@ -207,12 +254,11 @@
 					{/if}
 				</div>
 			</FormRow>
-
 			{#if !esNino}
 				<FormRow>
 					<FormField
 						name="brazos"
-						label="Brazos"
+						label="Brazos (Opcional)"
 						type="number"
 						placeholder="Ej. 55.5"
 						unit="cm"
@@ -224,7 +270,7 @@
 					/>
 					<FormField
 						name="pantorrillas"
-						label="Pantorrillas"
+						label="Pantorrillas (Opcional)"
 						type="number"
 						placeholder="Ej. 55.5"
 						unit="cm"
@@ -239,7 +285,7 @@
 				<FormRow>
 					<FormField
 						name="gluteo"
-						label="Glúteo"
+						label="Glúteo (Opcional)"
 						type="number"
 						placeholder="Ej. 55.5"
 						unit="cm"
@@ -251,7 +297,7 @@
 					/>
 					<FormField
 						name="muslos"
-						label="Muslos"
+						label="Muslos (Opcional)"
 						type="number"
 						placeholder="Ej. 55.5"
 						unit="cm"
@@ -266,7 +312,7 @@
 				<FormRow>
 					<FormField
 						name="pecho"
-						label="Pecho"
+						label="Pecho (Opcional)"
 						type="number"
 						placeholder="Ej. 55.5"
 						unit="cm"
@@ -275,10 +321,9 @@
 						bind:value={$form.pecho}
 						errors={$errors}
 						touched={$touched}
-					/>
-					<FormField
+					/><FormField
 						name="cintura"
-						label="Cintura"
+						label="Cintura (Opcional)"
 						type="number"
 						placeholder="Ej. 55.5"
 						unit="cm"
