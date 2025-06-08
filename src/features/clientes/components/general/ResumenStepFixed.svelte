@@ -22,56 +22,42 @@
 			: '';
 	$: imcData = calcularIMC(parseFloat(data.peso || '0'), parseFloat(data.altura || '0'));
 	$: imc = imcData ? `${imcData.imc} - ${imcData.categoria}` : 'Pendiente de cálculo';
-		// Variables para manejo de anualidad usando composables
-	$: incluyeAnualidad = data.incluyeAnualidad ?? true; // Por defecto incluir anualidad
+	// Variables para manejo de anualidad usando composables
+	$: incluyeAnualidad = data.incluyeAnualidad ?? false; // Por defecto NO incluir anualidad
 	$: precioBase = planSeleccionado ? Number(planSeleccionado.precio) : 0;
 	$: cuotasPendientes = []; // Se cargarían desde el servicio en un caso real
 	
 	// Calcular valores usando utilidades modulares
 	$: desglose = cuotaMantenimientoUtils.calcularDesglosePago(precioBase, cuotasPendientes);
-	$: precioTotal = incluyeAnualidad ? (precioBase + 10) : precioBase; // Simplificado para nuevos clientes
-	$: montoPago = data.monto ? parseFloat(data.monto) : precioTotal;
-	$: montoPendiente = Math.max(0, precioTotal - montoPago);
-	$: caracteresRestantes = 150 - (data.observaciones?.length || 0);	// Función para manejar cambio de anualidad - ACTUALIZADA según documentación
-	function handleAnualidadChange(incluye: boolean, monto: number) {
+	$: precioTotalConAnualidad = precioBase + 10; // Plan + anualidad
+	$: montoPago = data.monto ? parseFloat(data.monto) : 0;
+	$: caracteresRestantes = 150 - (data.observaciones?.length || 0);
+	// NUEVAS REGLAS DE VALIDACIÓN FLEXIBLES
+	$: montoMinimo = incluyeAnualidad ? 10 : 0.01; // Si incluye anualidad, mínimo $10 (cuota anual)
+	$: montoMaximo = undefined; // Sin límite máximo en ambos casos
+		// Calcular pendiente según la opción seleccionada
+	$: montoPendiente = (() => {
+		if (incluyeAnualidad) {
+			// Si incluye anualidad, calcular pendiente considerando que ya se pagó al menos la cuota anual
+			const montoRestanteplan = Math.max(0, precioBase - Math.max(0, montoPago - 10));
+			return montoRestanteplan;
+		} else {
+			// Si no incluye anualidad, calcular pendiente solo del plan
+			return Math.max(0, precioBase - montoPago);
+		}
+	})();
+	// Función para manejar cambio de anualidad - NUEVA LÓGICA FLEXIBLE
+	function handleAnualidadChange(incluye: boolean) {
 		if (updateField) {
 			updateField('incluyeAnualidad', incluye);
-			updateField('montoAnualidad', monto);
+			updateField('montoAnualidad', incluye ? 10 : 0);
 			
-			// Calcular monto total según documentación
-			const nuevoTotal = precioBase + (incluye ? 10 : 0);
-			
-			// Si incluye anualidad, el monto mínimo debe ser el total
-			// Según documentación: durante registro con anualidad se debe pagar el monto completo
+			// Actualizar monto según la opción seleccionada
 			if (incluye) {
-				updateField('monto', nuevoTotal.toString());
-				// Actualizar también el min del campo monto
-				if (data.monto && parseFloat(data.monto) < nuevoTotal) {
-					updateField('monto', nuevoTotal.toString());
-				}
+				// Si incluye anualidad, sugerir mínimo $10 pero permitir más
+				updateField('monto', '10.00');
 			} else {
-				updateField('monto', precioBase.toString());
-			}
-		}
-	}
-
-	// Función específica para el evento del checkbox (para clientes nuevos)
-	function handleCheckboxChange(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const value = target.checked;
-		handleAnualidadChange(value, value ? 10 : 0);
-	}
-
-	// Validación estricta: si incluye anualidad, monto no puede ser menor al total
-	$: montoMinimo = incluyeAnualidad ? precioTotal : precioBase;
-	
-	// Actualizar campo de monto cuando cambie el plan o la anualidad
-	$: {
-		if (updateField && precioTotal > 0) {
-			// Si incluye anualidad, forzar el monto completo
-			if (incluyeAnualidad) {
-				updateField('monto', precioTotal.toString());
-			} else if (!data.monto || parseFloat(data.monto) === 0) {
+				// Si no incluye anualidad, sugerir plan completo
 				updateField('monto', precioBase.toString());
 			}
 		}
@@ -120,85 +106,85 @@
 				onAnualidadChange={handleAnualidadChange}
 				{updateField}
 			/>		{:else}
-			<!-- Para clientes nuevos, mostrar versión simplificada con opciones de plan solo o plan + anualidad -->
+			<!-- Para clientes nuevos, mostrar versión simplificada con opciones claras -->
 			<div class="space-y-4">
 				<div class="rounded-md bg-blue-50 p-4 border border-blue-200">
-					<h4 class="font-medium text-blue-800 mb-3">Opciones de pago</h4>
-					
-					<!-- Opción 1: Solo Plan -->
-					<div class="space-y-3">
-						<label class="flex items-start space-x-3 cursor-pointer">
-							<input
-								type="radio"
-								name="tipoPago"
-								value="solo-plan"
-								checked={!incluyeAnualidad}
-								on:change={() => handleAnualidadChange(false, 0)}
-								class="mt-1 h-4 w-4 text-[var(--primary)] focus:ring-[var(--primary)]"
-							/>
-							<div class="flex-1">
-								<div class="font-medium text-blue-900">Solo Plan ({planSeleccionado?.nombre || 'seleccionado'})</div>
-								<div class="text-sm text-blue-700">
-									{cuotaMantenimientoUtils.formatearMonto(precioBase)}
-								</div>
-								<div class="text-xs text-blue-600 mt-1">
-									El cliente pagará la cuota de mantenimiento anual por separado cuando corresponda.
-								</div>
-							</div>
-						</label>
-						
-						<!-- Opción 2: Plan + Anualidad -->
-						<label class="flex items-start space-x-3 cursor-pointer">
-							<input
-								type="radio"
-								name="tipoPago"
-								value="plan-anualidad"
-								checked={incluyeAnualidad}
-								on:change={() => handleAnualidadChange(true, 10)}
-								class="mt-1 h-4 w-4 text-[var(--primary)] focus:ring-[var(--primary)]"
-							/>
-							<div class="flex-1">
-								<div class="font-medium text-blue-900">Plan + Cuota de Mantenimiento Anual</div>
-								<div class="text-sm text-blue-700">
-									{cuotaMantenimientoUtils.formatearMonto(precioBase)} + {cuotaMantenimientoUtils.formatearMonto(10)} = {cuotaMantenimientoUtils.formatearMonto(precioTotal)}
-								</div>
-								<div class="text-xs text-blue-600 mt-1">
-									Incluye el plan y la cuota de mantenimiento anual ($10.00).
-								</div>
-							</div>
-						</label>
+					<h4 class="font-medium text-blue-800 mb-3">💡 Importante</h4>
+					<div class="text-sm text-blue-700 bg-white p-3 rounded border border-blue-200">
+						<p class="font-medium mb-2">El sistema siempre creará una cuota de mantenimiento anual ($10.00):</p>
+						<ul class="list-disc list-inside space-y-1 text-xs">
+							<li><strong>Si pagas solo el plan:</strong> La cuota quedará pendiente para pagar después</li>
+							<li><strong>Si pagas plan + anualidad:</strong> La cuota se marca como pagada</li>
+						</ul>
 					</div>
 				</div>
-				
-				<!-- Resumen del total seleccionado -->
-				<div class="rounded-md bg-green-50 p-3 border border-green-200">
-					<p class="font-medium text-green-800">Total a pagar:</p>
-					<p class="text-lg font-bold text-green-900">{cuotaMantenimientoUtils.formatearMonto(precioTotal)}</p>
-					{#if incluyeAnualidad}
-						<p class="text-xs text-green-700 mt-1">
-							Incluye plan ({cuotaMantenimientoUtils.formatearMonto(precioBase)}) + cuota anual ({cuotaMantenimientoUtils.formatearMonto(10)})
-						</p>
-					{/if}
+
+				<div class="space-y-3">
+					<h4 class="font-medium text-gray-800">Opciones de pago:</h4>
+					
+					<!-- Opción 1: Solo Plan -->
+					<label class="flex items-start space-x-3 cursor-pointer p-3 rounded border-2 transition-colors" 
+						   class:border-blue-500={!incluyeAnualidad} 
+						   class:bg-blue-50={!incluyeAnualidad}
+						   class:border-gray-200={incluyeAnualidad}>
+						<input
+							type="radio"
+							name="tipoPago"
+							value="solo-plan"
+							checked={!incluyeAnualidad}
+							on:change={() => handleAnualidadChange(false)}
+							class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500"
+						/>
+						<div class="flex-1">
+							<div class="font-medium text-gray-900">Solo Plan: {planSeleccionado?.nombre || 'Seleccionado'}</div>					<div class="text-sm text-gray-600">
+						Precio: {cuotaMantenimientoUtils.formatearMonto(precioBase)} | Puede pagar cualquier cantidad
+					</div>
+							<div class="text-xs text-orange-600 mt-1 font-medium">
+								⚠️ Cuota de anualidad ($10.00) quedará pendiente
+							</div>
+						</div>
+					</label>
+					
+					<!-- Opción 2: Plan + Anualidad -->
+					<label class="flex items-start space-x-3 cursor-pointer p-3 rounded border-2 transition-colors"
+						   class:border-green-500={incluyeAnualidad} 
+						   class:bg-green-50={incluyeAnualidad}
+						   class:border-gray-200={!incluyeAnualidad}>
+						<input
+							type="radio"
+							name="tipoPago"
+							value="plan-anualidad"
+							checked={incluyeAnualidad}
+							on:change={() => handleAnualidadChange(true)}
+							class="mt-1 h-4 w-4 text-green-600 focus:ring-green-500"
+						/>						<div class="flex-1">
+							<div class="font-medium text-gray-900">Plan + Cuota de Mantenimiento (Flexible)</div>
+							<div class="text-sm text-gray-600">
+								Plan: {cuotaMantenimientoUtils.formatearMonto(precioBase)} | Cuota: {cuotaMantenimientoUtils.formatearMonto(10)} | Mínimo: $10.00
+							</div>
+							<div class="text-xs text-green-600 mt-1 font-medium">
+								✅ Puede pagar desde $10 (cuota) hasta el monto completo o más
+							</div>
+						</div>
+					</label>
 				</div>
 			</div>
-		{/if}
-		<FormRow>
+		{/if}		<FormRow>
 			<FormField
 				name="monto"
-				label="Monto"
+				label="Monto a pagar"
 				type="number"
-				placeholder={precioTotal ? `${precioTotal.toFixed(2)}` : '0.00'}
+				placeholder="0.00"
 				unit="$"
 				min={montoMinimo}
-				max={precioTotal}
-				step="0.01"
-				helperText={incluyeAnualidad 
-					? `Con anualidad el monto mínimo es: $${montoMinimo.toFixed(2)} (pago completo requerido)`
-					: `Total a pagar: $${precioTotal.toFixed(2)}. Puedes ajustar el monto si el pago es parcial.`}
+				max={montoMaximo}
+				step="0.01"				helperText={incluyeAnualidad 
+					? `Con anualidad: mínimo $10.00 (cuota anual). Sugerido: $${precioTotalConAnualidad.toFixed(2)} (plan completo)`
+					: `Puede abonar cualquier cantidad. Plan completo: $${precioBase.toFixed(2)}`}
 				bind:value={data.monto}
 				{errors}
 				{touched}
-				disabled={incluyeAnualidad} 
+				disabled={false}
 			/>
 			<FormField
 				name="referencia"
@@ -229,7 +215,6 @@
 			</div>
 		</div>
 	</div>
-
 	<!-- Resumen final -->
 	<div class="space-y-3 rounded-md border border-[var(--primary)] bg-[var(--primary)]/5 p-4">
 		<h3 class="text-lg font-semibold text-[var(--primary)]">Resumen</h3>
@@ -241,14 +226,25 @@
 					? `${planSeleccionado.nombre} (${planSeleccionado.duracionMeses} ${planSeleccionado.duracionMeses === 1 ? 'mes' : 'meses'})`
 					: 'No seleccionado'}
 			</p>
-			<p><strong>Índice de Masa Corporal:</strong> {imc}</p>
-			<div class="border-t pt-2">
-				<p><strong>Total:</strong> ${precioTotal.toFixed(2)}</p>
-				<p><strong>Monto pagado:</strong> ${montoPago.toFixed(2)}</p>
-				{#if montoPendiente > 0}
-					<p class="text-orange-600"><strong>Pendiente:</strong> ${montoPendiente.toFixed(2)}</p>
+			<p><strong>Índice de Masa Corporal:</strong> {imc}</p>			<div class="border-t pt-2">
+				{#if incluyeAnualidad}
+					<p><strong>Opción:</strong> Plan + Cuota Anual</p>
+					<p><strong>Monto pagado:</strong> ${montoPago.toFixed(2)}</p>
+					<p class="text-green-600"><strong>Cuota anual:</strong> Pagada ($10.00)</p>
+					{#if montoPendiente > 0}
+						<p class="text-orange-600"><strong>Pendiente del plan:</strong> ${montoPendiente.toFixed(2)}</p>
+					{:else}
+						<p class="text-green-600"><strong>Plan:</strong> Pago completo</p>
+					{/if}
 				{:else}
-					<p class="text-green-600"><strong>Estado:</strong> Pago completo</p>
+					<p><strong>Opción:</strong> Solo Plan</p>
+					<p><strong>Monto pagado:</strong> ${montoPago.toFixed(2)}</p>
+					{#if montoPendiente > 0}
+						<p class="text-orange-600"><strong>Pendiente del plan:</strong> ${montoPendiente.toFixed(2)}</p>
+					{:else}
+						<p class="text-green-600"><strong>Plan:</strong> Pago completo</p>
+					{/if}
+					<p class="text-orange-600"><strong>Cuota anual:</strong> $10.00 (pendiente)</p>
 				{/if}
 			</div>
 		</div>

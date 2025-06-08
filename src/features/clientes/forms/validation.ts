@@ -99,7 +99,7 @@ export const Step2Schema = yup.object({
     categoriaPeso: yup.string().nullable()
 });
 
-// STEP 3 ACTUALIZADO CON CAMPOS DE PAGO Y ANUALIDAD
+// STEP 3 ACTUALIZADO CON NUEVAS REGLAS DE ANUALIDAD
 export const Step3Schema = yup.object({
     fechaInicio: yup
         .string()
@@ -116,32 +116,28 @@ export const Step3Schema = yup.object({
         }),
     monto: yup
         .mixed()
-        .test('is-number-or-empty', 'Debe ser un número válido', (value) => {
-            if (value === '' || value === null || value === undefined) return true;
-            return !isNaN(Number(value)) && Number(value) >= 0;
+        .required('El monto es requerido')
+        .test('is-number', 'Debe ser un número válido', (value) => {
+            return !isNaN(Number(value)) && Number(value) > 0;
         })
         .test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
             if (!value) return true;
             const decimal = value.toString().split('.')[1];
             return !decimal || decimal.length <= 2;
-        })
-        .test('max-amount', 'El monto no puede exceder el precio del plan + renovación anual ($10)', function (value) {
-            if (!value) return true;
-            const planId = this.parent.idPlan;
-            if (!planId) return true;
+        })        .test('monto-minimo-anualidad', 'Si incluye anualidad, debe pagar el monto completo del plan + $10', function (value) {
+            const incluyeAnualidad = this.parent.incluyeAnualidad;
+            if (!incluyeAnualidad) return true; // Si no incluye anualidad, cualquier monto es válido
             
-            // Este test debe ser usado con un contexto que tenga acceso a los planes
-            // La validación específica se implementará en cada componente
-            return true;
-        })
-        .nullable(),
+            // Esta validación se complementa en el componente con el precio específico del plan
+            return Number(value) > 0;
+        }),
     referencia: yup.string().nullable(),
     observaciones: yup
         .string()
         .max(150, 'Las observaciones no pueden exceder 150 caracteres')
         .nullable(),
-    // Nuevos campos para anualidad
-    incluyeAnualidad: yup.boolean().default(true),
+    // Campos de anualidad actualizados
+    incluyeAnualidad: yup.boolean().default(false), // Por defecto NO incluir anualidad
     montoAnualidad: yup.number().nullable(),
 });
 
@@ -172,7 +168,7 @@ export const createMontoValidation = (planes: any[]) => {
         .nullable();
 };
 
-// Helper para crear Step3Schema with validación de monto específica
+// Helper para crear Step3Schema with validación de monto específica según nuevas reglas
 export const createStep3SchemaWithPlanValidation = (planes: any[]) => {
     return yup.object({
         fechaInicio: yup
@@ -188,14 +184,45 @@ export const createStep3SchemaWithPlanValidation = (planes: any[]) => {
                 const fechaHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
                 return fechaSeleccionada >= fechaHoy;
             }),
-        monto: createMontoValidation(planes),
+        monto: yup
+            .mixed()
+            .required('El monto es requerido')
+            .test('is-number', 'Debe ser un número válido', (value) => {
+                return !isNaN(Number(value)) && Number(value) > 0;
+            })
+            .test('decimal-places', 'Solo se permiten hasta 2 decimales', (value) => {
+                if (!value) return true;
+                const decimal = value.toString().split('.')[1];
+                return !decimal || decimal.length <= 2;
+            })            .test('monto-reglas-anualidad', 'Monto no válido según las opciones de pago', function (value) {
+                const incluyeAnualidad = this.parent.incluyeAnualidad;
+                const planId = this.parent.idPlan;
+                
+                if (!planId || !value) return false;
+                
+                const plan = planes.find(p => p.idPlan === parseInt(planId));
+                if (!plan) return false;
+                
+                const monto = Number(value);
+                
+                if (incluyeAnualidad) {
+                    // Si incluye anualidad, debe pagar mínimo $10 (cuota anual)
+                    if (monto < 10) {
+                        return this.createError({ message: 'Con anualidad debe pagar mínimo $10.00 (cuota anual)' });
+                    }
+                    return true;
+                } else {
+                    // Si no incluye anualidad, puede pagar cualquier cantidad positiva
+                    return monto > 0;
+                }
+            }),
         referencia: yup.string().nullable(),
         observaciones: yup
             .string()
             .max(150, 'Las observaciones no pueden exceder 150 caracteres')
             .nullable(),
-        // Nuevos campos para anualidad
-        incluyeAnualidad: yup.boolean().default(true),
+        // Nuevos campos para anualidad - por defecto FALSE
+        incluyeAnualidad: yup.boolean().default(false),
         montoAnualidad: yup.number().nullable(),
     });
 };
@@ -239,9 +266,8 @@ export const defaultClienteFormValues: ClienteFormData = {
     // CAMPOS DE PAGO
     monto: null,
     referencia: null,
-    observaciones: null,
-    // NUEVOS CAMPOS DE ANUALIDAD
-    incluyeAnualidad: true,
+    observaciones: null,    // NUEVOS CAMPOS DE ANUALIDAD - POR DEFECTO FALSE
+    incluyeAnualidad: false,
     montoAnualidad: null,
 };
 
