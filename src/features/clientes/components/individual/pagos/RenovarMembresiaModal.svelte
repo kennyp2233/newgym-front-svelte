@@ -14,11 +14,9 @@
 	} from '../../../../pagos/composables/pagoComposables';
 	import { createRenovacionManager } from '../../../../pagos/composables/renovacionComposables';
 	import { useRenovacionForm } from '../../../../pagos/composables/useRenovacionForm';
-
 	// Importar componentes modulares
 	import PagoFormFields from '../../../../pagos/forms/PagoFormFields.svelte';
 	import RenovacionStatusAlerts from './components/RenovacionStatusAlerts.svelte';
-	import RenovacionResumen from './components/RenovacionResumen.svelte';
 	export let isOpen = false;
 	export let cliente: Cliente;
 	export let planActualId: number | undefined = undefined;
@@ -33,12 +31,12 @@
 
 	// Destructurar stores para acceso reactivo
 	const { tieneDeudaActiva: pagoStoreState } = pagoStore;
-	const { puedeRenovar: renovacionState } = renovacionValidator;
-	const {
+	const { puedeRenovar: renovacionState } = renovacionValidator;	const {
 		planes,
 		planSeleccionado,
 		cuotasPendientes,
-		precioTotal,
+		precioTotal,  // Solo precio del plan
+		montoTotal,   // Plan + cuotas (total real)
 		montoMinimo,
 		getTotalCuotasPendientes
 	} = renovacionManager;
@@ -70,14 +68,17 @@
 			toasts.showToast('Error en el cálculo del pago.', 'error');
 			return;
 		}
-
 		isSubmitting = true;
+		
+		// Preparar datos según documentación estricta
+		const cuotasTotal = $cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+		const montoPlan = parseFloat($form.monto) || 0;
 		
 		const exito = await pagoStore.crearPago({
 			idCliente: cliente.idCliente,
 			idPlan: parseInt($form.idPlan),
-			monto: resumenPago.montoAlPlan || 0,
-			montoCuotaMantenimiento: resumenPago.montoACuotas || 0,
+			monto: montoPlan + cuotasTotal, // Total = plan + cuotas
+			montoCuotaMantenimiento: cuotasTotal, // Cuotas pendientes
 			fechaInicio: $form.fechaInicio || undefined,
 			referencia: $form.referencia || undefined,
 			observaciones: $form.observaciones || undefined
@@ -98,9 +99,7 @@
 			// Cargar datos usando composables
 			await pagoStore.cargarPagos();
 			await pagoStore.verificarDeudaActiva();
-			await renovacionValidator.validarRenovacion();
-
-			// Establecer monto inicial si hay un plan seleccionado
+			await renovacionValidator.validarRenovacion();			// Establecer monto inicial si hay un plan seleccionado
 			if (planActualId && $precioTotal > 0) {
 				setTimeout(() => {
 					updateFieldWrapper('monto', $precioTotal.toString());
@@ -110,12 +109,11 @@
 			console.error('Error al cargar datos:', error);
 			toasts.showToast('Error al cargar información', 'error');
 		}
-	});
-	// Actualizar plan seleccionado cuando cambia el idPlan
+	});	// Actualizar plan seleccionado cuando cambia el idPlan
 	function handlePlanChange(idPlan: string) {
 		renovacionManager.seleccionarPlan(idPlan);
 
-		// Solo establecer el monto total si el campo está vacío o es la primera vez
+		// Solo establecer el monto del plan si el campo está vacío
 		if ($precioTotal > 0 && (!$form.monto || $form.monto === '')) {
 			updateFieldWrapper('monto', $precioTotal.toString());
 		}
@@ -125,34 +123,40 @@
 		handlePlanChange($form.idPlan);
 	}
 	
-	// Solo establecer monto inicial si no hay monto y hay precio total
+	// Solo establecer monto inicial si no hay monto y hay precio del plan
 	$: if ($precioTotal > 0 && !$form.monto) {
 		updateFieldWrapper('monto', $precioTotal.toString());
-	}	// Calculate payment breakdown
+	}	// Calcular resumen de pago según documentación estricta
 	$: resumenPago = (() => {
 		if (!$form.monto || !$planSeleccionado) return null;
 		
-		const montoUsuario = parseFloat($form.monto.toString()) || 0;
-		if (montoUsuario <= 0) return null;
+		const montoPlan = parseFloat($form.monto.toString()) || 0;
+		if (montoPlan <= 0) return null;
 		
 		const precioPlan = $planSeleccionado.precio;
 		const cuotasTotal = $cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
 		
-		if (cuotasTotal > 0 && montoUsuario < cuotasTotal) {
+		// Validar que el monto no exceda el precio del plan
+		if (montoPlan > precioPlan) {
 			return {
 				error: true,
-				mensaje: `Monto insuficiente. Las cuotas ($${cuotasTotal.toFixed(2)}) son obligatorias.`,
-				montoMinimoRequerido: cuotasTotal
+				mensaje: `El monto no puede exceder el precio del plan ($${precioPlan.toFixed(2)})`,
+				montoMontoPlan: montoPlan
 			};
 		}
 		
+		// El resumen según la documentación:
+		// - montoAlPlan = lo que va al plan (input del usuario)
+		// - montoACuotas = cuotas pendientes (obligatorias, fijas)
+		// - montoTotal = monto plan + cuotas pendientes
+		const montoAlPlan = montoPlan;
 		const montoACuotas = cuotasTotal;
-		const montoAlPlan = Math.min(montoUsuario - cuotasTotal, precioPlan);
+		const montoTotal = montoAlPlan + montoACuotas;
 		
 		return {
 			montoAlPlan,
 			montoACuotas,
-			montoTotal: montoAlPlan + montoACuotas,
+			montoTotal,
 			esPagoParcial: montoAlPlan < precioPlan
 		};
 	})();
@@ -167,72 +171,62 @@
 		pagoStoreState={$pagoStoreState}
 		renovacionState={$renovacionState}
 		cuotasPendientes={$cuotasPendientes}
-	/>
-
-	<!-- Formulario de renovación -->
+	/>	<!-- Formulario de renovación -->
 	{#if !$pagoStoreState && $renovacionState.puede}
-		<form on:submit|preventDefault={handleSubmitForm}>
-			<div class="space-y-4">
-				<p class="mb-4 text-sm text-gray-600">
-					Renovar membresía para <strong>{cliente.nombre} {cliente.apellido}</strong>
-				</p>
+		<div class="space-y-6">
+			<!-- Header del formulario -->
+			<div class="border-b border-[var(--border)] pb-4">
+				<h3 class="text-lg font-semibold text-[var(--letter)]">
+					Renovar membresía - {cliente.nombre} {cliente.apellido}
+				</h3>
+			</div>
 
-				<!-- Componente de formulario modular -->
-				<div class="space-y-4 rounded-md border border-[var(--border)] bg-[var(--sections)] p-4">
-					<h3 class="text-lg font-semibold text-[var(--letter)]">Detalles de la renovación</h3>
+			<!-- Formulario -->
+			<form on:submit|preventDefault={handleSubmitForm} class="space-y-6">
+				<!-- Campos del formulario -->
+				<div class="bg-[var(--sections)] rounded-lg border border-[var(--border)] p-6">
 					<PagoFormFields
 						bind:form={$form}
 						planes={$planes}
 						planSeleccionado={$planSeleccionado}
-						precioTotal={$precioTotal}
 						caracteresRestantes={$caracteresRestantes}
 						errors={$errors}
 						touched={$touched}
-						isRenovacion={true}						cuotasPendientes={$cuotasPendientes}
-						helperTextMonto={$cuotasPendientes.length > 0 
-							? `Plan: $${$planSeleccionado?.precio.toFixed(2) || '0.00'} + Cuotas: $${getTotalCuotasPendientes($cuotasPendientes).toFixed(2)} = Total: $${$precioTotal.toFixed(2)}` 
-							: `Plan: $${$planSeleccionado?.precio.toFixed(2) || '0.00'} (pagos parciales permitidos)`}					/>
-				</div>				<!-- Payment summary -->
+						cuotasPendientes={$cuotasPendientes}
+					/>
+				</div>
+
+				<!-- Resumen del pago -->
 				{#if resumenPago && $form.monto && parseFloat($form.monto.toString()) > 0}
 					{#if resumenPago.error}
-						<div class="rounded-md border border-red-200 bg-red-50 p-3 text-sm">
-							<p class="font-medium text-red-800">❌ {resumenPago.mensaje}</p>
-							<p class="text-xs text-red-700">Mínimo requerido: $${resumenPago.montoMinimoRequerido.toFixed(2)}</p>
+						<div class="bg-red-50 border border-red-200 rounded-lg p-4">
+							<div class="flex items-center gap-2">
+								<span class="text-red-500 text-lg">⚠️</span>
+								<p class="font-medium text-red-800">{resumenPago.mensaje}</p>
+							</div>
 						</div>
 					{:else}
-						<div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
-							<h4 class="font-medium text-blue-800">Resumen del pago:</h4>							<div class="mt-2 space-y-1 text-blue-700">
-								<div class="flex justify-between">
-									<span>Plan {resumenPago.esPagoParcial ? '(Parcial)' : '(Completo)'}:</span>
-									<span class="font-medium">${(resumenPago.montoAlPlan || 0).toFixed(2)}</span>
+						<div class="bg-green-50 border border-green-200 rounded-lg p-6">
+							<div class="flex justify-between items-center">
+								<div>
+									<h4 class="text-lg font-semibold text-green-800 mb-1">Total a pagar</h4>
+									{#if resumenPago.esPagoParcial && $planSeleccionado}
+									<p class="text-sm text-amber-600">
+										Pago parcial • Restante: ${($planSeleccionado.precio - (resumenPago.montoAlPlan || 0)).toFixed(2)}
+									</p>
+									{/if}
 								</div>
-								{#if (resumenPago.montoACuotas || 0) > 0}
-								<div class="flex justify-between">
-									<span>Cuotas:</span>
-									<span class="font-medium">${(resumenPago.montoACuotas || 0).toFixed(2)}</span>
+								<div class="text-right">
+									<span class="text-3xl font-bold text-green-700">
+										${(resumenPago.montoTotal || 0).toFixed(2)}
+									</span>
 								</div>
-								{/if}
-								<div class="flex justify-between border-t border-blue-300 pt-1 font-bold">
-									<span>Total:</span>
-									<span>${(resumenPago.montoTotal || 0).toFixed(2)}</span>
-								</div>
-								{#if resumenPago.esPagoParcial}
-								<p class="text-xs text-amber-700">⚠️ Pago parcial: Estado será "Pendiente"</p>
-								{/if}
 							</div>
 						</div>
 					{/if}
 				{/if}
-				
-				<!-- Componente de resumen -->
-				<RenovacionResumen
-					planSeleccionado={$planSeleccionado}
-					cuotasPendientes={$cuotasPendientes}
-					precioTotal={$precioTotal}
-					form={$form}
-				/>
-			</div>
-		</form>
+			</form>
+		</div>
 	{/if}	<svelte:fragment slot="footer">
 		{#if $pagoStoreState || !$renovacionState.puede}
 			<Button variant="primary" on:click={onClose}>Entendido</Button>

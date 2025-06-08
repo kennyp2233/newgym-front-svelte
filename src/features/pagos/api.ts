@@ -270,11 +270,9 @@ class PagoService {    // Renovar plan de un cliente - ACTUALIZADO según docume
 
             if (!cliente.inscripciones || cliente.inscripciones.length === 0) {
                 return { puede: false, mensaje: 'El cliente no tiene inscripciones activas' };
-            }
-
-            // Obtener la inscripción más reciente
+            }            // Obtener la inscripción con fecha de fin más reciente (la que vence más tarde)
             const inscripcionActiva = cliente.inscripciones.sort(
-                (a: any, b: any) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()
+                (a: any, b: any) => new Date(b.fechaFin || '').getTime() - new Date(a.fechaFin || '').getTime()
             )[0];
 
             if (!inscripcionActiva.fechaFin) {

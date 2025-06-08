@@ -19,38 +19,40 @@ export function createRenovacionManager(cliente: Cliente, planActualId?: number)
 	const planSeleccionado = writable<Plan | null>(null);
 	const cuotasPendientes = writable<any[]>([]);
 	const loadingCuotas = writable(false);
-
-	// Cálculos derivados
+	// Cálculos derivados - CORREGIDO según documentación
+	// precioTotal = solo el precio del plan (para el input)
 	const precioTotal = derived(
+		[planSeleccionado],
+		([$planSeleccionado]) => {
+			return $planSeleccionado ? $planSeleccionado.precio : 0;
+		}
+	);
+
+	// montoTotal = precio plan + cuotas pendientes (total real a pagar)
+	const montoTotal = derived(
 		[planSeleccionado, cuotasPendientes],
 		([$planSeleccionado, $cuotasPendientes]) => {
-			if (!$planSeleccionado) {
-				return getTotalCuotasPendientes($cuotasPendientes);
+			let total = 0;
+			
+			if ($planSeleccionado) {
+				total += $planSeleccionado.precio;
 			}
 			
-			let total = $planSeleccionado.precio;
 			if ($cuotasPendientes && $cuotasPendientes.length > 0) {
 				const totalPendientes = $cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
 				total += totalPendientes;
 			}
+			
 			return total;
 		}
 	);
 
 	const montoMinimo = derived(
-		[planSeleccionado, cuotasPendientes],
-		([$planSeleccionado, $cuotasPendientes]) => {
+		[cuotasPendientes],
+		([$cuotasPendientes]) => {
+			// Si hay cuotas pendientes, el mínimo es cubrirlas
 			const cuotasPendientesTotal = getTotalCuotasPendientes($cuotasPendientes);
-			
-			if (cuotasPendientesTotal > 0) {
-				return cuotasPendientesTotal;
-			}
-			
-			if ($planSeleccionado) {
-				return $planSeleccionado.precio;
-			}
-			
-			return 0;
+			return cuotasPendientesTotal > 0 ? cuotasPendientesTotal : 0.01;
 		}
 	);
 
@@ -119,14 +121,14 @@ export function createRenovacionManager(cliente: Cliente, planActualId?: number)
 
 		return añoInicial + (añoActual - añoInicial) + 1;
 	}
-
 	return {
 		// Estados
 		planes: { subscribe: planes.subscribe },
 		planSeleccionado: { subscribe: planSeleccionado.subscribe },
 		cuotasPendientes: { subscribe: cuotasPendientes.subscribe },
 		loadingCuotas: { subscribe: loadingCuotas.subscribe },
-		precioTotal,
+		precioTotal, // Precio solo del plan
+		montoTotal,  // Precio plan + cuotas (total real)
 		montoMinimo,
 		
 		// Acciones

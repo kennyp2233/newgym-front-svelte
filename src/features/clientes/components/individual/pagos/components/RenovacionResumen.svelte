@@ -2,9 +2,7 @@
 <script lang="ts">
 	import type { Plan } from '../../../../../planes/api';
 
-	export let planSeleccionado: Plan | null;
-	export let cuotasPendientes: any[] = [];
-	export let precioTotal: number;
+	export let planSeleccionado: Plan | null;	export let cuotasPendientes: any[] = [];
 	export let form: any;
 
 	// Función local para calcular total de cuotas
@@ -12,6 +10,11 @@
 		if (!cuotas || cuotas.length === 0) return 0;
 		return cuotas.reduce((sum, cuota) => sum + cuota.monto, 0);
 	}
+
+	// Calcular valores separados
+	$: precioPlan = planSeleccionado ? planSeleccionado.precio : 0;
+	$: totalCuotas = getTotalCuotasPendientes(cuotasPendientes);
+	$: montoPlanIngresado = form.monto ? parseFloat(form.monto) : 0;
 </script>
 
 {#if planSeleccionado}
@@ -35,41 +38,49 @@
 						${planSeleccionado.precio.toFixed(2)}
 					</p>
 				</div>
-			</div>
-
-			<!-- Cuotas incluidas -->
+			</div>			<!-- Cuotas obligatorias (si las hay) -->
 			{#if cuotasPendientes.length > 0}
 				<div class="border-t pt-3">
-					<p class="mb-2 font-medium text-gray-700">Cuotas incluidas:</p>
+					<p class="mb-2 font-medium text-gray-700">Cuotas de Mantenimiento (Obligatorias):</p>
 					<div class="space-y-1">
 						{#each cuotasPendientes as cuota}
-							<div class="flex justify-between text-xs">
-								<span>Cuota {cuota.anio}</span>
-								<span>${cuota.monto.toFixed(2)}</span>
+							<div class="flex justify-between text-xs bg-amber-50 p-2 rounded">
+								<span>• Cuota {cuota.anio}</span>
+								<span class="font-medium">${cuota.monto.toFixed(2)}</span>
 							</div>
 						{/each}
+						<div class="flex justify-between text-sm font-medium bg-amber-100 p-2 rounded">
+							<span>Subtotal Cuotas:</span>
+							<span>${totalCuotas.toFixed(2)}</span>
+						</div>
 					</div>
 				</div>
 			{/if}
 
-			<!-- Total a pagar -->
-			<div class="border-t pt-3">
-				<div class="flex items-center justify-between">
-					<span class="font-bold text-gray-800">Total a pagar:</span>
-					<span class="text-xl font-bold text-[var(--primary)]">${precioTotal.toFixed(2)}</span>
-				</div>
-				<!-- Monto ingresado diferente -->
-				{#if form.monto && form.monto !== '' && !isNaN(parseFloat(form.monto)) && parseFloat(form.monto) !== precioTotal}
-					<div class="mt-1 flex items-center justify-between text-sm">
-						<span class="text-gray-600">Monto ingresado:</span>
-						<span class="font-medium">${parseFloat(form.monto).toFixed(2)}</span>
+			<!-- Desglose del pago -->
+			<div class="border-t pt-3 bg-blue-50 p-3 rounded">
+				<h4 class="font-medium text-blue-800 mb-2">💰 Desglose del pago:</h4>
+				<div class="space-y-1 text-sm">
+					<div class="flex justify-between">
+						<span>Plan ({montoPlanIngresado < precioPlan ? 'Parcial' : 'Completo'}):</span>
+						<span class="font-medium">${montoPlanIngresado.toFixed(2)} / ${precioPlan.toFixed(2)}</span>
 					</div>
-					{#if parseFloat(form.monto) < precioTotal}
-						<p class="mt-1 text-xs text-orange-600">
-							⚠️ Pago parcial - Restante: ${(precioTotal - parseFloat(form.monto)).toFixed(2)}
-						</p>
+					{#if totalCuotas > 0}
+					<div class="flex justify-between">
+						<span>Cuotas Pendientes:</span>
+						<span class="font-medium">${totalCuotas.toFixed(2)}</span>
+					</div>
 					{/if}
-				{/if}
+					<div class="flex justify-between border-t border-blue-300 pt-1 font-bold text-blue-800">
+						<span>Total a pagar:</span>
+						<span>${(montoPlanIngresado + totalCuotas).toFixed(2)}</span>
+					</div>
+					{#if montoPlanIngresado < precioPlan}
+					<p class="text-xs text-amber-700 mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+						⚠️ Restante del plan: ${(precioPlan - montoPlanIngresado).toFixed(2)}
+					</p>
+					{/if}
+				</div>
 			</div>
 
 			<!-- Fechas de vigencia -->

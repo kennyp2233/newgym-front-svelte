@@ -7,10 +7,7 @@
     export let errors: any;
     export let touched: any;
     export let planes: Plan[] = [];
-    export let planSeleccionado: Plan | null = null;
-    export let precioTotal: number = 0;
-    export let caracteresRestantes: number = 150;
-    export let isRenovacion: boolean = false;
+    export let planSeleccionado: Plan | null = null;    export let caracteresRestantes: number = 150;
     export let showPlanField = true;
     export let showDateField = true;
     export let showObservationsField = true;
@@ -38,98 +35,130 @@
         const fecha = new Date(fechaInicio);
         fecha.setMonth(fecha.getMonth() + duracionMeses);
         return fecha.toISOString().split('T')[0];
-    }    // Helper text dinámico para monto con cuotas de mantenimiento - MEJORADO
+    }    // Helper text limpio y conciso
     $: montoHelperText = (() => {
         if (helperTextMonto) return helperTextMonto;
         
         if (!planSeleccionado) {
-            return 'Seleccione un plan para ver el precio total';
+            return 'Seleccione un plan para ver el precio';
         }
         
-        const cuotasPendientesTotal = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+        const cuotasTotal = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
+        let mensaje = `Plan: $${planSeleccionado.precio.toFixed(2)}`;
         
-        if (cuotasPendientesTotal > 0) {
-            return `Plan: $${planSeleccionado.precio.toFixed(2)} + Cuotas pendientes: $${cuotasPendientesTotal.toFixed(2)} = Total requerido: $${precioTotal.toFixed(2)}`;
-        } else {
-            return `Precio del plan: $${planSeleccionado.precio.toFixed(2)}. Si no especifica monto, se tomará el precio completo.`;
+        if (cuotasTotal > 0) {
+            mensaje += ` • Total con cuotas: $${(planSeleccionado.precio + cuotasTotal).toFixed(2)}`;
         }
+        
+        return mensaje;
     })();
 </script>
 
-<!-- Selección de plan -->
-{#if showPlanField}
-    <FormRow>
-        <FormField
-            name="idPlan"
-            label="Plan"
-            type="select"
-            options={planOptions}
-            bind:value={form.idPlan}
-            {errors}
-            {touched}
-        />
-        <div></div>
-    </FormRow>
-{/if}
-
-<FormRow>
-    <FormField
-        name="monto"
-        label="Monto a pagar {cuotasPendientes.length > 0 ? '(Requerido)' : '(Opcional)'}"
-        type="number"
-        placeholder={precioTotal ? precioTotal.toFixed(2) : "0.00"}
-        helperText={montoHelperText}
-        unit="$"
-        min={cuotasPendientes.length > 0 ? precioTotal : 0.01}
-        max={maxMonto}
-        step="0.01"
-        bind:value={form.monto}
-        {errors}
-        {touched}
-        required={cuotasPendientes.length > 0}
-    />
-    {#if showDateField}
-        <FormField
-            name="fechaInicio"
-            label="Fecha de inicio (Opcional)"
-            type="date"
-            helperText="Si no se especifica, se usará la fecha actual"
-            bind:value={form.fechaInicio}
-            {errors}
-            {touched}
-        />
-    {:else}
-        <div></div>
+<!-- Formulario organizado con mejor espaciado -->
+<div class="space-y-6">
+    <!-- Selección de plan -->
+    {#if showPlanField}
+        <FormRow>
+            <FormField
+                name="idPlan"
+                label="Plan"
+                type="select"
+                options={planOptions}
+                bind:value={form.idPlan}
+                {errors}
+                {touched}
+            />
+            <div></div>
+        </FormRow>
     {/if}
-</FormRow>
 
-{#if showReferenceField}
+    <!-- Cuotas pendientes (si las hay) -->
+    {#if cuotasPendientes.length > 0}
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h4 class="font-medium text-amber-800 text-sm">Cuotas Pendientes</h4>
+                    <p class="text-xs text-amber-600 mt-1">Se incluirán automáticamente</p>
+                </div>
+                <div class="text-right">
+                    <span class="font-bold text-amber-800">
+                        +${cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0).toFixed(2)}
+                    </span>
+                    {#if cuotasPendientes.length > 1}
+                        <p class="text-xs text-amber-600">
+                            {cuotasPendientes.length} cuotas
+                        </p>
+                    {/if}
+                </div>
+            </div>
+        </div>
+    {/if}
+
+    <!-- Monto y fecha -->
     <FormRow>
         <FormField
-            name="referencia"
-            label="Referencia (Opcional)"
-            placeholder="Ej: TRF-123456, Boleta #123, etc."
-            bind:value={form.referencia}
+            name="monto"
+            label="Monto del Plan"
+            type="number"
+            placeholder={planSeleccionado ? planSeleccionado.precio.toFixed(2) : "0.00"}
+            helperText={montoHelperText}
+            unit="$"
+            min={0.01}
+            max={planSeleccionado ? planSeleccionado.precio : maxMonto}
+            step="0.01"
+            bind:value={form.monto}
             {errors}
             {touched}
+            required={true}
         />
-        <div></div>
+        {#if showDateField}
+            <FormField
+                name="fechaInicio"
+                label="Fecha de inicio"
+                type="date"
+                helperText="Opcional"
+                bind:value={form.fechaInicio}
+                {errors}
+                {touched}
+            />
+        {:else}
+            <div></div>
+        {/if}
     </FormRow>
-{/if}
 
-{#if showObservationsField}
-    <div class="w-full space-y-1.5">
-        <!-- svelte-ignore a11y_label_has_associated_control -->
-        <label class="text-md font-bold text-[var(--letter)]">Observaciones (Opcional)</label>
-        <textarea
-            name="observaciones"
-            bind:value={form.observaciones}
-            class="flex min-h-[80px] w-full rounded-md border border-[var(--border)] bg-[var(--sections)] px-3 py-2 text-base focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder="Comentarios adicionales sobre el pago..."
-            maxlength="150"
-        ></textarea>
-        <p class={`text-sm ${caracteresRestantes < 10 ? 'text-red-500' : 'text-gray-500'}`}>
-            {caracteresRestantes} caracteres restantes
-        </p>
-    </div>
-{/if}
+    <!-- Referencia -->
+    {#if showReferenceField}
+        <FormRow>
+            <FormField
+                name="referencia"
+                label="Referencia"
+                placeholder="Ej: TRF-123456, Boleta #123"
+                helperText="Opcional"
+                bind:value={form.referencia}
+                {errors}
+                {touched}
+            />
+            <div></div>
+        </FormRow>
+    {/if}
+
+    <!-- Observaciones -->
+    {#if showObservationsField}
+        <div class="space-y-2">
+            <label class="text-sm font-medium text-[var(--letter)]">
+                Observaciones
+                <span class="text-gray-500 font-normal">(Opcional)</span>
+            </label>
+            <textarea
+                name="observaciones"
+                bind:value={form.observaciones}
+                class="w-full min-h-[80px] rounded-lg border border-[var(--border)] bg-white px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                placeholder="Comentarios adicionales..."
+                maxlength="150"
+            ></textarea>
+            <p class="text-xs text-right {caracteresRestantes < 10 ? 'text-red-500' : 'text-gray-500'}">
+                {caracteresRestantes} caracteres restantes
+            </p>
+        </div>
+    {/if}
+</div>

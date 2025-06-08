@@ -26,39 +26,28 @@ export const nuevoPagoValidationSchema = yup.object({
 });
 
 /**
- * Esquema de validación para renovación con validación de cuotas pendientes
+ * Esquema de validación para renovación con lógica de cuotas separadas
  */
 export const createRenovacionValidationSchema = (cuotasPendientes: any[] = [], planes: Plan[] = []) => {
-    const totalCuotasPendientes = cuotasPendientes.reduce((sum, cuota) => sum + cuota.monto, 0);
-    
     return nuevoPagoValidationSchema.concat(
         yup.object({
             monto: yup
                 .number()
-                .nullable()
+                .required('El monto del plan es requerido')
+                .min(0.01, 'El monto mínimo es $0.01')
                 .test(
-                    'min-pending-fees',
-                    'El monto debe cubrir las cuotas de mantenimiento pendientes',
+                    'max-plan-amount',
+                    'El monto no puede exceder el precio del plan',
                     function (value) {
                         if (!value) return false;
                         
-                        // Si hay cuotas pendientes, debe cubrirlas como mínimo
-                        if (totalCuotasPendientes > 0 && value < totalCuotasPendientes) {
-                            return this.createError({
-                                message: `Debe pagar mínimo $${totalCuotasPendientes.toFixed(2)} para cubrir las cuotas pendientes`
-                            });
-                        }
-                        
-                        // Si no hay cuotas pendientes, validar contra el plan seleccionado
-                        if (totalCuotasPendientes === 0) {
-                            const { idPlan } = this.parent;
-                            if (idPlan) {
-                                const plan = planes.find((p) => p.idPlan === parseInt(idPlan));
-                                if (plan && value < plan.precio) {
-                                    return this.createError({
-                                        message: `El monto mínimo para el plan es $${plan.precio.toFixed(2)}`
-                                    });
-                                }
+                        const { idPlan } = this.parent;
+                        if (idPlan) {
+                            const plan = planes.find((p) => p.idPlan === parseInt(idPlan));
+                            if (plan && value > plan.precio) {
+                                return this.createError({
+                                    message: `El monto máximo para este plan es $${plan.precio.toFixed(2)}`
+                                });
                             }
                         }
                         

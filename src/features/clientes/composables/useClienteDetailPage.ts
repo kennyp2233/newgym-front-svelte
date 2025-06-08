@@ -1,6 +1,7 @@
 import { writable, derived, get, type Readable } from 'svelte/store';
 import { pagoService } from '../../pagos/api';
 import { cuotaMantenimientoService, type CuotaMantenimientoDTO } from '../../cuotas-mantenimiento/api';
+import { pagoUtils } from '../../pagos/composables/pagoComposables';
 import { toasts } from '$lib/stores/toastStore';
 import { createClienteStore } from './clienteComposables';
 
@@ -102,17 +103,25 @@ export function useClienteDetailPage(clienteId: number) {
 			return false;
 		}
 	}
-
 	async function checkDeudaPendiente() {
 		try {
 			const pagos = await pagoService.getPagosByCliente(clienteId);
 			
+			// Use the same logic as the payment table: check if any payment has remaining amount > 0
+			// and is not cancelled, regardless of its status
+			const tieneDeudaPendiente = pagos.some((pago) => {
+				if (pago.estado === 'Anulado' || !pago.inscripcion) {
+					return false;
+				}
+				
+				const montoRestante = pagoUtils.calcularMontoRestante(pago, pagos);
+				return montoRestante > 0;
+			});
+			
 			pageState.update(state => ({
 				...state,
 				historialPagos: pagos,
-				tieneDeudaPendiente: pagos.some(
-					(pago) => pago.estado === 'Pendiente' && pago.inscripcion
-				)
+				tieneDeudaPendiente
 			}));
 		} catch (error) {
 			console.error('Error al verificar deuda:', error);
@@ -126,12 +135,21 @@ export function useClienteDetailPage(clienteId: number) {
 				? currentState.historialPagos 
 				: await pagoService.getPagosByCliente(clienteId);
 			
+			// Use the same logic as the payment table: filter payments with remaining amount > 0
+			// and not cancelled, regardless of their status
+			const pagosPendientes = pagos.filter((pago: any) => {
+				if (pago.estado === 'Anulado' || !pago.inscripcion) {
+					return false;
+				}
+				
+				const montoRestante = pagoUtils.calcularMontoRestante(pago, pagos);
+				return montoRestante > 0;
+			});
+			
 			pageState.update(state => ({
 				...state,
 				historialPagos: pagos,
-				pagosPendientes: pagos.filter(
-					(p: any) => p.estado === 'Pendiente' && p.inscripcion
-				)
+				pagosPendientes
 			}));
 		} catch (error) {
 			console.error('Error al cargar pagos pendientes:', error);
