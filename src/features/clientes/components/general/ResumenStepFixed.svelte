@@ -30,31 +30,17 @@
 	$: desglose = cuotaMantenimientoUtils.calcularDesglosePago(precioBase, cuotasPendientes);
 	$: precioTotalConAnualidad = precioBase + 10; // Plan + anualidad
 	$: montoPago = data.monto ? parseFloat(data.monto) : 0;
-	$: caracteresRestantes = 150 - (data.observaciones?.length || 0);	// NUEVAS REGLAS DE VALIDACIÓN FLEXIBLES
-	$: montoMinimo = incluyeCuotaMantenimiento ? 10 : 0.01; // Si incluye cuota, mínimo $10 (cuota anual)
-	$: montoMaximo = undefined; // Sin límite máximo en ambos casos
-		// Calcular pendiente según la opción seleccionada
-	$: montoPendiente = (() => {
-		if (incluyeCuotaMantenimiento) {
-			// Si incluye cuota, calcular pendiente considerando que ya se pagó al menos la cuota anual
-			const montoRestanteplan = Math.max(0, precioBase - Math.max(0, montoPago - 10));
-			return montoRestanteplan;
-		} else {
-			// Si no incluye cuota, calcular pendiente solo del plan
-			return Math.max(0, precioBase - montoPago);
-		}
-	})();	// Función para manejar cambio de cuota de mantenimiento - NUEVA LÓGICA FLEXIBLE
+	$: caracteresRestantes = 150 - (data.observaciones?.length || 0);	// NUEVAS REGLAS DE VALIDACIÓN FLEXIBLES - SOLO PARA EL PLAN
+	$: montoMinimo = 0.01; // Mínimo para cualquier pago del plan
+	$: montoMaximo = undefined; // Sin límite máximo		// Calcular pendiente según la opción seleccionada - SOLO DEL PLAN
+	$: montoPendiente = Math.max(0, precioBase - montoPago);	// Función para manejar cambio de cuota de mantenimiento - SOLO AFECTA VALOR SUGERIDO
 	function handleCuotaMantenimientoChange(incluye: boolean) {
 		if (updateField) {
 			updateField('incluyeCuotaMantenimiento', incluye);
 			updateField('observacionesCuota', incluye ? '' : null);
 			
-			// Actualizar monto según la opción seleccionada
-			if (incluye) {
-				// Si incluye cuota, sugerir mínimo $10 pero permitir más
-				updateField('monto', '10.00');
-			} else {
-				// Si no incluye cuota, sugerir plan completo
+			// NO cambiar el monto automáticamente, solo sugerir el valor del plan
+			if (!data.monto || data.monto === '' || data.monto === '0') {
 				updateField('monto', precioBase.toString());
 			}
 		}
@@ -105,12 +91,13 @@
 			<!-- Para clientes nuevos, mostrar versión simplificada con opciones claras -->
 			<div class="space-y-4">
 				<div class="rounded-md bg-blue-50 p-4 border border-blue-200">
-					<h4 class="font-medium text-blue-800 mb-3">💡 Importante</h4>
-					<div class="text-sm text-blue-700 bg-white p-3 rounded border border-blue-200">
-						<p class="font-medium mb-2">El sistema siempre creará una cuota de mantenimiento anual ($10.00):</p>
+					<h4 class="font-medium text-blue-800 mb-3">💡 Importante</h4>					<div class="text-sm text-blue-700 bg-white p-3 rounded border border-blue-200">
+						<p class="font-medium mb-2">El sistema maneja pagos por separado:</p>
 						<ul class="list-disc list-inside space-y-1 text-xs">
+							<li><strong>El input "Monto a pagar"</strong> es únicamente para el valor del plan</li>
+							<li><strong>La cuota de mantenimiento ($10.00)</strong> se maneja automáticamente por el backend</li>
+							<li><strong>Si pagas plan + cuota:</strong> Se procesan como un solo pago pero campos separados</li>
 							<li><strong>Si pagas solo el plan:</strong> La cuota quedará pendiente para pagar después</li>
-							<li><strong>Si pagas plan + anualidad:</strong> La cuota se marca como pagada</li>
 						</ul>
 					</div>
 				</div>
@@ -129,11 +116,12 @@
 							checked={!incluyeCuotaMantenimiento}
 							on:change={() => handleCuotaMantenimientoChange(false)}
 							class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500"
-						/>
-						<div class="flex-1">
-							<div class="font-medium text-gray-900">Solo Plan: {planSeleccionado?.nombre || 'Seleccionado'}</div><div class="text-sm text-gray-600">
-						Precio: {cuotaMantenimientoUtils.formatearMonto(precioBase)} | Puede pagar cualquier cantidad
-					</div>							<div class="text-xs text-orange-600 mt-1 font-medium">
+						/>						<div class="flex-1">
+							<div class="font-medium text-gray-900">Solo Plan: {planSeleccionado?.nombre || 'Seleccionado'}</div>
+							<div class="text-sm text-gray-600">
+								Precio: {cuotaMantenimientoUtils.formatearMonto(precioBase)} | Pago solo del plan
+							</div>
+							<div class="text-xs text-orange-600 mt-1 font-medium">
 								⚠️ Cuota de mantenimiento ($10.00) quedará pendiente
 							</div>
 						</div>
@@ -152,12 +140,12 @@
 							on:change={() => handleCuotaMantenimientoChange(true)}
 							class="mt-1 h-4 w-4 text-green-600 focus:ring-green-500"
 						/>						<div class="flex-1">
-							<div class="font-medium text-gray-900">Plan + Cuota de Mantenimiento (Flexible)</div>
+							<div class="font-medium text-gray-900">Plan + Cuota de Mantenimiento</div>
 							<div class="text-sm text-gray-600">
-								Plan: {cuotaMantenimientoUtils.formatearMonto(precioBase)} | Cuota: {cuotaMantenimientoUtils.formatearMonto(10)} | Mínimo: $10.00
+								Plan: {cuotaMantenimientoUtils.formatearMonto(precioBase)} | Cuota: {cuotaMantenimientoUtils.formatearMonto(10)} (se maneja por separado)
 							</div>
 							<div class="text-xs text-green-600 mt-1 font-medium">
-								✅ Puede pagar desde $10 (cuota) hasta el monto completo o más
+								✅ Pagar el plan + cuota de mantenimiento al mismo tiempo
 							</div>
 						</div>
 					</label>
@@ -172,9 +160,7 @@
 				unit="$"
 				min={montoMinimo}
 				max={montoMaximo}
-				step="0.01"				helperText={incluyeCuotaMantenimiento 
-					? `Con cuota de mantenimiento: mínimo $10.00 (cuota anual). Sugerido: $${precioTotalConAnualidad.toFixed(2)} (plan completo)`
-					: `Puede abonar cualquier cantidad. Plan completo: $${precioBase.toFixed(2)}`}
+				step="0.01"				helperText={`Monto del plan solamente. Plan completo: $${precioBase.toFixed(2)}${incluyeCuotaMantenimiento ? '. La cuota de mantenimiento ($10.00) se maneja por separado.' : ''}`}
 				bind:value={data.monto}
 				{errors}
 				{touched}
@@ -238,25 +224,60 @@
 					: 'No seleccionado'}
 			</p>
 			<p><strong>Índice de Masa Corporal:</strong> {imc}</p>			<div class="border-t pt-2">
-				{#if incluyeCuotaMantenimiento}
-					<p><strong>Opción:</strong> Plan + Cuota de Mantenimiento</p>
-					<p><strong>Monto pagado:</strong> ${montoPago.toFixed(2)}</p>
-					<p class="text-green-600"><strong>Cuota de mantenimiento:</strong> Pagada ($10.00)</p>
-					{#if montoPendiente > 0}
-						<p class="text-orange-600"><strong>Pendiente del plan:</strong> ${montoPendiente.toFixed(2)}</p>
+				<div class="space-y-1">
+					{#if incluyeCuotaMantenimiento}
+						<p><strong>Opción:</strong> Plan + Cuota de Mantenimiento</p>
+						
+						<!-- Desglose del subtotal -->
+						<div class="bg-gray-50 rounded p-2 text-xs">
+							<p class="font-medium mb-1">💰 Desglose del pago:</p>
+							<div class="space-y-0.5">
+								<div class="flex justify-between">
+									<span>• Plan:</span>
+									<span>${montoPago.toFixed(2)}</span>
+								</div>
+								<div class="flex justify-between">
+									<span>• Cuota de mantenimiento:</span>
+									<span>$10.00</span>
+								</div>
+								<div class="flex justify-between border-t pt-0.5 font-medium">
+									<span>Subtotal:</span>
+									<span>${(montoPago + 10).toFixed(2)}</span>
+								</div>
+							</div>
+						</div>
+						
+						{#if montoPendiente > 0}
+							<p class="text-orange-600"><strong>Pendiente del plan:</strong> ${montoPendiente.toFixed(2)}</p>
+						{:else}
+							<p class="text-green-600"><strong>Plan:</strong> Pago completo</p>
+						{/if}
 					{:else}
-						<p class="text-green-600"><strong>Plan:</strong> Pago completo</p>
+						<p><strong>Opción:</strong> Solo Plan</p>
+						
+						<!-- Desglose del subtotal -->
+						<div class="bg-gray-50 rounded p-2 text-xs">
+							<p class="font-medium mb-1">💰 Subtotal del pago:</p>
+							<div class="space-y-0.5">
+								<div class="flex justify-between">
+									<span>• Plan:</span>
+									<span>${montoPago.toFixed(2)}</span>
+								</div>
+								<div class="flex justify-between font-medium">
+									<span>Total a pagar ahora:</span>
+									<span>${montoPago.toFixed(2)}</span>
+								</div>
+							</div>
+						</div>
+						
+						{#if montoPendiente > 0}
+							<p class="text-orange-600"><strong>Pendiente del plan:</strong> ${montoPendiente.toFixed(2)}</p>
+						{:else}
+							<p class="text-green-600"><strong>Plan:</strong> Pago completo</p>
+						{/if}
+						<p class="text-orange-600"><strong>Cuota de mantenimiento:</strong> $10.00 (pendiente)</p>
 					{/if}
-				{:else}
-					<p><strong>Opción:</strong> Solo Plan</p>
-					<p><strong>Monto pagado:</strong> ${montoPago.toFixed(2)}</p>
-					{#if montoPendiente > 0}
-						<p class="text-orange-600"><strong>Pendiente del plan:</strong> ${montoPendiente.toFixed(2)}</p>
-					{:else}
-						<p class="text-green-600"><strong>Plan:</strong> Pago completo</p>
-					{/if}
-					<p class="text-orange-600"><strong>Cuota de mantenimiento:</strong> $10.00 (pendiente)</p>
-				{/if}
+				</div>
 			</div>
 		</div>
 	</div>
