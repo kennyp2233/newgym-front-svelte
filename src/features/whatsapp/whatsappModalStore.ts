@@ -11,11 +11,16 @@ const initialState: WhatsAppModalState = {
 
 function createWhatsAppModalStore() {
 	const { subscribe, update } = writable(initialState);
-
 	return {
 		subscribe,
-		openTestModal: () => update(state => ({ ...state, showTestModal: true })),
-		closeTestModal: () => update(state => ({ ...state, showTestModal: false }))
+		openTestModal: () => {
+			console.log('WhatsApp Modal Store: Opening test modal...');
+			update(state => ({ ...state, showTestModal: true }));
+		},
+		closeTestModal: () => {
+			console.log('WhatsApp Modal Store: Closing test modal...');
+			update(state => ({ ...state, showTestModal: false }));
+		}
 	};
 }
 

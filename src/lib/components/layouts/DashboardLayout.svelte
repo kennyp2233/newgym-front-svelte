@@ -4,6 +4,9 @@
 	import ToastContainer from '$lib/components/ui/Toast/ToastContainer.svelte';
 	import WhatsAppTestModal from '../../../features/whatsapp/WhatsAppTestModal.svelte';
 	import { whatsappModalStore } from '../../../features/whatsapp/whatsappModalStore';
+	
+	// Debug: Watch store changes
+	$: console.log('DashboardLayout: whatsappModalStore state:', $whatsappModalStore);
 </script>
 
 <div class="flex min-h-screen flex-col bg-[var(--background)] font-[family-name:var(--font-main)]">

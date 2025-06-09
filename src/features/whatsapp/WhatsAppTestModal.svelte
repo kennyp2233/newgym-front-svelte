@@ -16,9 +16,9 @@
 	let phoneNumber = '';
 	let isLoading = false;
 	let error = '';
-
 	// Reiniciar valores cuando se abre el modal
 	$: if (isOpen) {
+		console.log('WhatsAppTestModal is opening...'); // Debug
 		phoneNumber = '';
 		error = '';
 		isLoading = false;

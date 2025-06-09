@@ -50,7 +50,9 @@
 		} finally {
 			isRefreshing = false;
 		}
-	}	async function sendTestMessage() {
+	}
+	async function sendTestMessage() {
+		console.log('Opening WhatsApp test modal...'); // Debug
 		whatsappModalStore.openTestModal();
 		isDropdownOpen = false;
 	}
@@ -161,9 +163,6 @@
 					<Button size="sm" variant="outline" on:click={sendTestMessage} className="flex-1">
 						Test
 					</Button>
-					<Button size="sm" variant="ghost" on:click={openDetailModal}>
-						<Icon name="info" size={14} />
-					</Button>
 				</div>
 			</div>
 		</div>
@@ -238,7 +237,8 @@
 			<Button variant="outline" on:click={resetSession} isLoading={isRefreshing}>
 				<Icon name="refresh" size={16} className="mr-2" />
 				Verificar estado
-			</Button>			{#if status === 'connected'}
+			</Button>
+			{#if status === 'connected'}
 				<Button variant="primary" on:click={sendTestMessage}>
 					<Icon name="whatsapp" size={16} className="mr-2" />
 					Enviar prueba
