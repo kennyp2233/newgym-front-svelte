@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { env } from '$env/dynamic/public';
 
 /**
  * Función recursiva para convertir strings numéricos a numbers en objetos/arrays
@@ -33,7 +34,7 @@ function parseNumericStrings(obj: any): any {
 }
 
 export const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+    baseURL: env.PUBLIC_API_URL || 'http://localhost:3000',
     headers: {
         'Content-Type': 'application/json'
     }

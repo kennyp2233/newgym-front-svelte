@@ -62,9 +62,7 @@ export const estadisticas = {
 
     setMes: (mes: number) => {
         estadisticasStore.update(state => ({ ...state, mesSeleccionado: mes }));
-    },
-
-    // Cargar resumen del dashboard
+    },    // Cargar resumen del dashboard
     async cargarResumenDashboard() {
         estadisticasStore.update(state => ({ ...state, loadingResumen: true, error: null }));
 
@@ -83,24 +81,12 @@ export const estadisticas = {
                 ...state,
                 error: errorMsg,
                 loadingResumen: false,
-                // Usar datos de prueba en caso de error
-                resumenData: {
-                    inscritosMes: 15,
-                    clientesActivos: 125,
-                    comparativaMensual: {
-                        mesAnterior: 'Nov',
-                        mesActual: 'Dic',
-                        variacionPorcentaje: 12.5
-                    },
-                    ingresosMes: 3250
-                }
+                resumenData: null
             }));
-            toasts.showToast(errorMsg, 'warning');
+            toasts.showToast(errorMsg, 'error');
             return null;
         }
-    },
-
-    // Cargar distribución de membresías
+    },    // Cargar distribución de membresías
     async cargarDistribucionMembresias() {
         estadisticasStore.update(state => ({ ...state, loadingDistribucion: true, error: null }));
 
@@ -119,20 +105,12 @@ export const estadisticas = {
                 ...state,
                 error: errorMsg,
                 loadingDistribucion: false,
-                // Datos de prueba
-                distribucionData: [
-                    { nombrePlan: 'Plan Mensual', cantidad: 45, porcentaje: 36 },
-                    { nombrePlan: 'Plan Trimestral', cantidad: 35, porcentaje: 28 },
-                    { nombrePlan: 'Plan Semestral', cantidad: 25, porcentaje: 20 },
-                    { nombrePlan: 'Plan Anual', cantidad: 20, porcentaje: 16 }
-                ]
+                distribucionData: null
             }));
-            toasts.showToast(errorMsg, 'warning');
+            toasts.showToast(errorMsg, 'error');
             return null;
         }
-    },
-
-    // Cargar tendencia mensual
+    },    // Cargar tendencia mensual
     async cargarTendenciaMensual(anio?: number) {
         estadisticasStore.update(state => ({ ...state, loadingTendencia: true, error: null }));
 
@@ -157,19 +135,12 @@ export const estadisticas = {
                 ...state,
                 error: errorMsg,
                 loadingTendencia: false,
-                // Datos de prueba
-                tendenciaData: {
-                    meses: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
-                    clientes: [12, 15, 18, 22, 19, 25, 28, 30, 26, 32, 29, 35],
-                    ingresos: [1200, 1500, 1800, 2200, 1900, 2500, 2800, 3000, 2600, 3200, 2900, 3500]
-                }
+                tendenciaData: null
             }));
-            toasts.showToast(errorMsg, 'warning');
+            toasts.showToast(errorMsg, 'error');
             return null;
         }
-    },
-
-    // Cargar actividades semanales
+    },    // Cargar actividades semanales
     async cargarActividadesSemanales(mes?: number, anio?: number) {
         estadisticasStore.update(state => ({ ...state, loadingActividad: true, error: null }));
 
@@ -197,15 +168,9 @@ export const estadisticas = {
                 ...state,
                 error: errorMsg,
                 loadingActividad: false,
-                // Datos de prueba
-                actividadData: [
-                    { nombreActividad: 'Plan Mensual', semana1: 5, semana2: 8, semana3: 6, semana4: 9 },
-                    { nombreActividad: 'Plan Trimestral', semana1: 3, semana2: 4, semana3: 5, semana4: 6 },
-                    { nombreActividad: 'Plan Semestral', semana1: 2, semana2: 3, semana3: 2, semana4: 4 },
-                    { nombreActividad: 'Plan Anual', semana1: 1, semana2: 2, semana3: 1, semana4: 3 }
-                ]
+                actividadData: null
             }));
-            toasts.showToast(errorMsg, 'warning');
+            toasts.showToast(errorMsg, 'error');
             return null;
         }
     },

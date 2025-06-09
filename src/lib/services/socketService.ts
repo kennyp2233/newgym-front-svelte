@@ -1,10 +1,11 @@
 import { io, Socket } from 'socket.io-client';
+import { env } from '$env/dynamic/public';
 
 let socket: Socket | null = null;
 
 export function initializeSocket() {
     if (!socket) {
-        socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
+        socket = io(env.PUBLIC_API_URL || 'http://localhost:3000', {
             reconnectionDelayMax: 10000,
             transports: ['websocket'],
         });

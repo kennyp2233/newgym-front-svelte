@@ -41,36 +41,6 @@ export interface ComparativaMensual {
 }
 
 class EstadisticasService {
-    // Datos de prueba para fallback
-    private datosPrueba = {
-        resumen: {
-            inscritosMes: 15,
-            clientesActivos: 125,
-            comparativaMensual: {
-                mesAnterior: 'Nov',
-                mesActual: 'Dic',
-                variacionPorcentaje: 12.5
-            },
-            ingresosMes: 3250
-        },
-        distribucion: [
-            { nombrePlan: 'Plan Mensual', cantidad: 45, porcentaje: 36 },
-            { nombrePlan: 'Plan Trimestral', cantidad: 35, porcentaje: 28 },
-            { nombrePlan: 'Plan Semestral', cantidad: 25, porcentaje: 20 },
-            { nombrePlan: 'Plan Anual', cantidad: 20, porcentaje: 16 }
-        ],
-        tendencia: {
-            meses: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
-            clientes: [12, 15, 18, 22, 19, 25, 28, 30, 26, 32, 29, 35],
-            ingresos: [1200, 1500, 1800, 2200, 1900, 2500, 2800, 3000, 2600, 3200, 2900, 3500]
-        },
-        actividad: [
-            { nombreActividad: 'Plan Mensual', semana1: 5, semana2: 8, semana3: 6, semana4: 9 },
-            { nombreActividad: 'Plan Trimestral', semana1: 3, semana2: 4, semana3: 5, semana4: 6 },
-            { nombreActividad: 'Plan Semestral', semana1: 2, semana2: 3, semana3: 2, semana4: 4 },
-            { nombreActividad: 'Plan Anual', semana1: 1, semana2: 2, semana3: 1, semana4: 3 }
-        ]
-    };
 
     // Obtener resumen del dashboard
     async getResumenDashboard(): Promise<ResumenDashboard> {
@@ -93,13 +63,10 @@ class EstadisticasService {
                 ingresosMes: Number(response.data.ingresosMes) || 0
             };
         } catch (error) {
-            console.warn('Error al obtener resumen del dashboard, usando datos de prueba:', error);
-            // Retornar datos de prueba en lugar de lanzar error
-            return this.datosPrueba.resumen;
+            console.error('Error al obtener resumen del dashboard:', error);
+            throw error;
         }
-    }
-
-    // Obtener distribución de membresías
+    }    // Obtener distribución de membresías
     async getDistribucionMembresias(): Promise<DistribucionMembresia[]> {
         try {
             const response = await api.get('/estadisticas/distribucion-membresias');
@@ -114,12 +81,10 @@ class EstadisticasService {
                 porcentaje: Number(item.porcentaje) || 0
             }));
         } catch (error) {
-            console.warn('Error al obtener distribución de membresías, usando datos de prueba:', error);
-            return this.datosPrueba.distribucion;
+            console.error('Error al obtener distribución de membresías:', error);
+            throw error;
         }
-    }
-
-    // Obtener tendencia mensual de clientes e ingresos
+    }    // Obtener tendencia mensual de clientes e ingresos
     async getTendenciaMensual(anio: number = new Date().getFullYear()): Promise<TendenciaMensual> {
         try {
             const response = await api.get(`/estadisticas/tendencia-clientesingresos?anio=${anio}`);
@@ -134,12 +99,10 @@ class EstadisticasService {
                 ingresos: (response.data.ingresos || []).map((i: any) => Number(i) || 0)
             };
         } catch (error) {
-            console.warn('Error al obtener tendencia mensual, usando datos de prueba:', error);
-            return this.datosPrueba.tendencia;
+            console.error('Error al obtener tendencia mensual:', error);
+            throw error;
         }
-    }
-
-    // Obtener actividades semanales
+    }    // Obtener actividades semanales
     async getActividadesSemanales(
         mes: number = new Date().getMonth(),
         anio: number = new Date().getFullYear()
@@ -159,8 +122,8 @@ class EstadisticasService {
                 semana4: Number(item.semana4) || 0
             }));
         } catch (error) {
-            console.warn('Error al obtener actividades semanales, usando datos de prueba:', error);
-            return this.datosPrueba.actividad;
+            console.error('Error al obtener actividades semanales:', error);
+            throw error;
         }
     }
 
@@ -201,9 +164,7 @@ class EstadisticasService {
             console.warn('API de estadísticas no disponible:', error);
             return false;
         }
-    }
-
-    // Método para obtener todos los datos con un solo request (optimización)
+    }    // Método para obtener todos los datos con un solo request (optimización)
     async getDashboardCompleto(): Promise<{
         resumen: ResumenDashboard;
         distribucion: DistribucionMembresia[];
@@ -219,21 +180,23 @@ class EstadisticasService {
                 this.getActividadesSemanales()
             ]);
 
+            // Si algún método falla, lanzar error
+            if (resumen.status === 'rejected' ||
+                distribucion.status === 'rejected' ||
+                tendencia.status === 'rejected' ||
+                actividad.status === 'rejected') {
+                throw new Error('Error al obtener algunos datos del dashboard');
+            }
+
             return {
-                resumen: resumen.status === 'fulfilled' ? resumen.value : this.datosPrueba.resumen,
-                distribucion: distribucion.status === 'fulfilled' ? distribucion.value : this.datosPrueba.distribucion,
-                tendencia: tendencia.status === 'fulfilled' ? tendencia.value : this.datosPrueba.tendencia,
-                actividad: actividad.status === 'fulfilled' ? actividad.value : this.datosPrueba.actividad
+                resumen: resumen.value,
+                distribucion: distribucion.value,
+                tendencia: tendencia.value,
+                actividad: actividad.value
             };
         } catch (error) {
             console.error('Error al obtener dashboard completo:', error);
-            // Retornar todos los datos de prueba si hay error general
-            return {
-                resumen: this.datosPrueba.resumen,
-                distribucion: this.datosPrueba.distribucion,
-                tendencia: this.datosPrueba.tendencia,
-                actividad: this.datosPrueba.actividad
-            };
+            throw error;
         }
     }
 }

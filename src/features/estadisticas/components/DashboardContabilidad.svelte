@@ -42,19 +42,15 @@
 			unsubscribe();
 		}
 	});
-
 	// Función separada para cargar datos con mejor manejo de errores
 	async function cargarDatosDashboard() {
 		try {
 			await estadisticas.cargarDashboardCompleto();
-			if ($error) {
-				console.warn('Error en datos del dashboard, usando datos de prueba');
-			}
 		} catch (error) {
 			console.error('Error al cargar dashboard:', error);
 			toasts.showToast(
-				'Error al cargar los datos del dashboard, mostrando datos de prueba',
-				'warning'
+				'Error al cargar los datos del dashboard',
+				'error'
 			);
 		}
 	}
