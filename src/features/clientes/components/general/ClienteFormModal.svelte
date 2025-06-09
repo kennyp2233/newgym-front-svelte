@@ -6,12 +6,12 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import InformacionPersonalStepFixed from './InformacionPersonalStepFixed.svelte';
 	import MedidasStepFixed from './MedidasStepFixed.svelte';
-	import ResumenStepFixed from './ResumenStepFixed.svelte';
-	import {
+	import ResumenStepFixed from './ResumenStepFixed.svelte';	import {
 		Step1Schema,
 		Step2Schema,
 		Step3Schema,
 		CompleteSchema,
+		createStep1Schema,
 		createStep3SchemaWithPlanValidation,
 		defaultClienteFormValues,
 		type ClienteFormData
@@ -126,19 +126,23 @@
 			// Optionally clear errors when going back, or leave them
 			// errors.set({}); // Clears all errors
 		}
-	}
-	// Obtener el esquema para el paso actual
+	}	// Obtener el esquema para el paso actual
 	function getSchemaForCurrentStep() {
 		switch (currentStep) {
 			case 0:
-				return Step1Schema;
+				// Usar validación dinámica de cédula basada en si es edición o no
+				const isEditMode = !!clienteToEdit;
+				const currentCedula = clienteToEdit?.cedula as string | undefined;
+				return createStep1Schema(isEditMode, currentCedula);
 			case 1:
 				return Step2Schema;
 			case 2:
 				// Usar validación dinámica con los planes cargados
 				return planes.length > 0 ? createStep3SchemaWithPlanValidation(planes) : Step3Schema;
 			default:
-				return Step1Schema;
+				const defaultIsEditMode = !!clienteToEdit;
+				const defaultCurrentCedula = clienteToEdit?.cedula as string | undefined;
+				return createStep1Schema(defaultIsEditMode, defaultCurrentCedula);
 		}
 	}
 

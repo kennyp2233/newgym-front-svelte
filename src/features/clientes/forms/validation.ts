@@ -1,40 +1,72 @@
 // src/features/clientes/forms/validation.ts
 import * as yup from 'yup';
-import { TipoOcupacion } from '../api';
+import { TipoOcupacion, clienteService } from '../api';
 import type { PagoDTO } from '../../pagos/api';
 
-// Esquemas por paso
-export const Step1Schema = yup.object({
-    nombre: yup.string().required('El nombre es requerido'),
-    apellido: yup.string().required('El apellido es requerido'),
-    cedula: yup
+// Helper function para validación asíncrona de cédula
+export const createCedulaValidation = (isEditMode: boolean = false, currentCedula?: string) => {
+    return yup
         .string()
         .min(10, 'La cédula debe tener al menos 10 dígitos')
-        .required('La cédula es requerida'),
-    celular: yup
-        .string()
-        .min(10, 'El celular debe tener al menos 10 dígitos')
-        .required('El celular es requerido'),
-    ciudad: yup.string().required('La ciudad es requerida'),
-    pais: yup.string().required('El país es requerido'),
-    direccion: yup.string().required('La dirección es requerida'),
-    fechaNacimiento: yup.string().required('La fecha de nacimiento es requerida'),
-    correo: yup.string().email('El correo no es válido').required('El correo es requerido'),
-    ocupacion: yup
-        .mixed<TipoOcupacion>()
-        .oneOf(Object.values(TipoOcupacion))
-        .required('La ocupación es requerida'),
-    puestoTrabajo: yup.string().when('ocupacion', {
-        is: TipoOcupacion.TRABAJO,
-        then: (schema) => schema.required('El puesto de trabajo es requerido para trabajadores'),
-        otherwise: (schema) => schema.notRequired(),
-    }),
-    idPlan: yup.string()
-        .required('Debe seleccionar un plan')
-        .test('not-empty', 'Debe seleccionar un plan', (value) => {
-            return value !== '' && value !== null && value !== undefined;
+        .required('La cédula es requerida')
+        .test(
+            'cedula-unique',
+            'Esta cédula ya está registrada',
+            async function (value) {
+                if (!value) return false;
+                
+                // Si está en modo edición y la cédula no cambió, no validar
+                if (isEditMode && value === currentCedula) {
+                    return true;
+                }
+                
+                try {
+                    const exists = await clienteService.verificarCedulaExiste(value);
+                    return !exists;
+                } catch (error) {
+                    // En caso de error de red, permitir continuar
+                    console.warn('Error verificando cédula:', error);
+                    return true;
+                }
+            }
+        );
+};
+
+// Esquemas por paso
+// Función para crear Step1Schema con validación de cédula personalizada
+export const createStep1Schema = (isEditMode: boolean = false, currentCedula?: string) => {
+    return yup.object({
+        nombre: yup.string().required('El nombre es requerido'),
+        apellido: yup.string().required('El apellido es requerido'),
+        cedula: createCedulaValidation(isEditMode, currentCedula),
+        celular: yup
+            .string()
+            .min(10, 'El celular debe tener al menos 10 dígitos')
+            .required('El celular es requerido'),
+        ciudad: yup.string().required('La ciudad es requerida'),
+        pais: yup.string().required('El país es requerido'),
+        direccion: yup.string().required('La dirección es requerida'),
+        fechaNacimiento: yup.string().required('La fecha de nacimiento es requerida'),
+        correo: yup.string().email('El correo no es válido').required('El correo es requerido'),
+        ocupacion: yup
+            .mixed<TipoOcupacion>()
+            .oneOf(Object.values(TipoOcupacion))
+            .required('La ocupación es requerida'),
+        puestoTrabajo: yup.string().when('ocupacion', {
+            is: TipoOcupacion.TRABAJO,
+            then: (schema) => schema.required('El puesto de trabajo es requerido para trabajadores'),
+            otherwise: (schema) => schema.notRequired(),
         }),
-});
+        idPlan: yup.string()
+            .required('Debe seleccionar un plan')
+            .test('not-empty', 'Debe seleccionar un plan', (value) => {
+                return value !== '' && value !== null && value !== undefined;
+            }),
+    });
+};
+
+// Esquema Step1 por defecto (para nuevos clientes)
+export const Step1Schema = createStep1Schema();
 
 export const Step2Schema = yup.object({
     peso: yup
@@ -270,23 +302,28 @@ export const defaultClienteFormValues: ClienteFormData = {
 };
 
 // Esquema específico para edición de información personal del cliente
-export const EditClienteSchema = yup.object({
-    nombre: yup.string().required('El nombre es requerido'),
-    apellido: yup.string().required('El apellido es requerido'),
-    cedula: yup.string().required('La cédula es requerida'),
-    celular: yup.string().required('El celular es requerido'),
-    ciudad: yup.string().required('La ciudad es requerida'),
-    pais: yup.string().required('El país es requerido'),
-    direccion: yup.string().required('La dirección es requerida'),
-    correo: yup.string().email('Correo inválido').required('El correo es requerido'),
-    ocupacion: yup.string().required('La ocupación es requerida'),
-    puestoTrabajo: yup.string().when('ocupacion', {
-        is: TipoOcupacion.TRABAJO,
-        then: (schema) => schema.required('El puesto de trabajo es requerido'),
-        otherwise: (schema) => schema.notRequired()
-    }),
-    fechaNacimiento: yup.string().nullable()
-});
+export const createEditClienteSchema = (currentCedula?: string) => {
+    return yup.object({
+        nombre: yup.string().required('El nombre es requerido'),
+        apellido: yup.string().required('El apellido es requerido'),
+        cedula: createCedulaValidation(true, currentCedula),
+        celular: yup.string().required('El celular es requerido'),
+        ciudad: yup.string().required('La ciudad es requerida'),
+        pais: yup.string().required('El país es requerido'),
+        direccion: yup.string().required('La dirección es requerida'),
+        correo: yup.string().email('Correo inválido').required('El correo es requerido'),
+        ocupacion: yup.string().required('La ocupación es requerida'),
+        puestoTrabajo: yup.string().when('ocupacion', {
+            is: TipoOcupacion.TRABAJO,
+            then: (schema) => schema.required('El puesto de trabajo es requerido'),
+            otherwise: (schema) => schema.notRequired()
+        }),
+        fechaNacimiento: yup.string().nullable()
+    });
+};
+
+// Esquema por defecto para edición (para compatibilidad)
+export const EditClienteSchema = createEditClienteSchema();
 
 // Valores iniciales para edición de cliente
 export const createEditClienteFormValues = (cliente: any) => ({

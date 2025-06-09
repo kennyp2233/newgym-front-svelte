@@ -113,9 +113,7 @@ class ClienteService {
             console.error(`Error al obtener cliente con ID ${id}:`, error);
             return null;
         }
-    }
-
-    // Buscar cliente por cédula
+    }    // Buscar cliente por cédula
     async getClienteByCedula(cedula: string): Promise<Cliente | null> {
         try {
             const response = await api.get(`/clientes/cedula/${cedula}`);
@@ -123,6 +121,17 @@ class ClienteService {
         } catch (error) {
             console.error(`Error al buscar cliente con cédula ${cedula}:`, error);
             return null;
+        }
+    }
+
+    // Verificar si existe una cédula en la base de datos
+    async verificarCedulaExiste(cedula: string): Promise<boolean> {
+        try {
+            const response = await api.get(`/clientes/chequeoCI/${cedula}`);
+            return response.data === true || response.data === "true";
+        } catch (error) {
+            console.error(`Error al verificar cédula ${cedula}:`, error);
+            return false;
         }
     }
 

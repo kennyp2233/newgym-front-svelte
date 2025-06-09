@@ -2,7 +2,8 @@
 	"name": "frontend-gym-deploy-svelte",
 	"private": true,
 	"version": "0.0.1",
-	"type": "module",	"scripts": {
+	"type": "module",
+	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
@@ -25,6 +26,7 @@
 		"@tailwindcss/typography": "^0.5.15",
 		"@tailwindcss/vite": "^4.0.0",
 		"@types/chart.js": "^2.9.41",
+		"@types/lodash-es": "^4.17.12",
 		"eslint": "^9.18.0",
 		"eslint-config-prettier": "^10.0.1",
 		"eslint-plugin-svelte": "^3.0.0",
@@ -49,6 +51,7 @@
 		"html2canvas": "^1.4.1",
 		"jspdf": "^3.0.1",
 		"jspdf-autotable": "^5.0.2",
+		"lodash-es": "^4.17.21",
 		"lucide-svelte": "^0.511.0",
 		"recharts": "^2.15.3",
 		"socket.io-client": "^4.8.1",
