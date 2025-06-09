@@ -1,34 +1,29 @@
 // src/hooks.server.ts
 import { SvelteKitAuth } from "@auth/sveltekit"
 import Auth0 from "@auth/sveltekit/providers/auth0"
-import {
-    AUTH0_CLIENT_ID,
-    AUTH0_CLIENT_SECRET,
-    AUTH0_DOMAIN,
-    AUTH_SECRET
-} from "$env/static/private"
+import { env } from "$env/dynamic/private"
 
 console.log('Auth0 Configuration:', {
-    domain: AUTH0_DOMAIN,
-    clientId: AUTH0_CLIENT_ID ? 'set' : 'not set',
-    clientSecret: AUTH0_CLIENT_SECRET ? 'set' : 'not set',
-    authSecret: AUTH_SECRET ? 'set' : 'not set'
+    domain: env.AUTH0_DOMAIN,
+    clientId: env.AUTH0_CLIENT_ID ? 'set' : 'not set',
+    clientSecret: env.AUTH0_CLIENT_SECRET ? 'set' : 'not set',
+    authSecret: env.AUTH_SECRET ? 'set' : 'not set'
 })
 
 export const { handle, signIn, signOut } = SvelteKitAuth({
     providers: [Auth0({
-        clientId: AUTH0_CLIENT_ID || 'dummy-client-id',
-        clientSecret: AUTH0_CLIENT_SECRET || 'dummy-client-secret',
-        issuer: `https://${AUTH0_DOMAIN || 'dummy.auth0.com'}`,
+        clientId: env.AUTH0_CLIENT_ID || 'dummy-client-id',
+        clientSecret: env.AUTH0_CLIENT_SECRET || 'dummy-client-secret',
+        issuer: `https://${env.AUTH0_DOMAIN || 'dummy.auth0.com'}`,
         authorization: {
             params: {
                 scope: "openid profile email read:shows",
-                audience: `https://${AUTH0_DOMAIN || 'dummy.auth0.com'}/api/v2/`
+                audience: `https://${env.AUTH0_DOMAIN || 'dummy.auth0.com'}/api/v2/`
             }
         }
     })
     ],
-    secret: AUTH_SECRET || 'fallback-secret-for-build-only-not-for-production',
+    secret: env.AUTH_SECRET || 'fallback-secret-for-build-only-not-for-production',
     trustHost: true,
     debug: true,
     callbacks: {

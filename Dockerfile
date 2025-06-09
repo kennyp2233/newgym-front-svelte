@@ -15,12 +15,6 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Set build-time environment variables with defaults
-ENV AUTH0_CLIENT_ID=build-dummy-client-id \
-    AUTH0_CLIENT_SECRET=build-dummy-client-secret \
-    AUTH0_DOMAIN=build-dummy.auth0.com \
-    AUTH_SECRET=build-dummy-secret-please-change-in-production
-
 # Build the application
 RUN npm run build
 
